@@ -19,11 +19,28 @@ function required(name: string, value: string | undefined): string {
   return value.trim();
 }
 
+/**
+ * Accetta l'URL del progetto in qualsiasi forma copiata dal pannello Supabase
+ * (es. con "/rest/v1/" finale o spazi) e restituisce solo l'origine
+ * "https://xxxx.supabase.co": il client aggiunge da solo "/rest/v1".
+ */
+export function normalizeSupabaseUrl(raw: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(raw.trim());
+  } catch {
+    throw new ConfigError("SUPABASE_URL non è un URL valido (es. https://xxxx.supabase.co)");
+  }
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    throw new ConfigError("SUPABASE_URL deve iniziare con https://");
+  }
+  return parsed.origin;
+}
+
 export function getSupabaseEnv() {
   return {
-    url: required(
-      "SUPABASE_URL",
-      process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL,
+    url: normalizeSupabaseUrl(
+      required("SUPABASE_URL", process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL),
     ),
     serviceRoleKey: required("SUPABASE_SERVICE_ROLE_KEY", process.env.SUPABASE_SERVICE_ROLE_KEY),
   };

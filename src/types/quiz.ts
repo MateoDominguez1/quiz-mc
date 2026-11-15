@@ -4,7 +4,10 @@ export type AnswerLetter = (typeof ANSWER_LETTERS)[number];
 export const PRIZE_TYPES = ["braccialetto", "cono", "caffe"] as const;
 export type PrizeType = (typeof PRIZE_TYPES)[number];
 
-/** Testi dei premi (il premio è sempre deciso dal server in base all'età). */
+/**
+ * Testi predefiniti dei premi (il tipo di premio è sempre deciso dal server in
+ * base all'età). Nome e messaggio sono modificabili dall'amministratore.
+ */
 export const PRIZE_INFO: Record<PrizeType, { label: string; ages: string; winMessage: string }> = {
   braccialetto: { label: "Braccialetto", ages: "0–10 anni", winMessage: "Complimenti! Hai vinto un braccialetto!" },
   cono: { label: "Cono", ages: "11–17 anni", winMessage: "Complimenti! Hai vinto un cono!" },
@@ -24,6 +27,7 @@ export interface PublicQuestion {
 export interface WonPrize {
   type: PrizeType;
   label: string;
+  winMessage: string;
   imageUrl: string | null;
   code: string;
   status: "pending" | "redeemed";
@@ -71,7 +75,7 @@ export interface AdminStats {
   todayWinners: number;
   averageAge: number | null;
   ageBrackets: AgeBracket[];
-  prizesByType: Record<PrizeType, { won: number; redeemed: number }>;
+  prizesByType: Record<PrizeType, { label: string; won: number; redeemed: number }>;
   totalQuestions: number;
   activeQuestions: number;
 }
@@ -79,6 +83,8 @@ export interface AdminStats {
 export interface PrizeSetting {
   type: PrizeType;
   label: string;
+  /** Messaggio personalizzato; null = predefinito. */
+  winMessage: string | null;
   imageUrl: string | null;
   updatedAt: string;
 }
@@ -110,4 +116,13 @@ export interface Redemption {
   prizeType: PrizeType;
   label: string;
   redeemedAt: string;
+}
+
+/** Messaggio di vittoria: quello personalizzato o, in mancanza, quello predefinito. */
+export function winMessageFor(type: PrizeType, label: string, custom: string | null | undefined): string {
+  if (custom && custom.trim()) return custom.trim();
+  if (label.trim().toLocaleLowerCase("it-IT") === PRIZE_INFO[type].label.toLocaleLowerCase("it-IT")) {
+    return PRIZE_INFO[type].winMessage;
+  }
+  return `Complimenti! Hai vinto: ${label.trim()}!`;
 }

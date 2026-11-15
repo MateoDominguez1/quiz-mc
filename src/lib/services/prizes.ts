@@ -30,12 +30,15 @@ export function detectImageType(bytes: Uint8Array): { type: string; ext: string 
 }
 
 export async function listPrizeSettings(): Promise<PrizeSetting[]> {
-  const rows = await callRpc<{ prize_type: PrizeType; label: string; image_path: string | null; updated_at: string }[]>(
+  const rows = await callRpc<
+    { prize_type: PrizeType; label: string; win_message: string | null; image_path: string | null; updated_at: string }[]
+  >(
     "admin_list_prize_settings",
   );
   return rows.map((r) => ({
     type: r.prize_type,
     label: r.label,
+    winMessage: r.win_message,
     imageUrl: prizeImageUrl(r.image_path),
     updatedAt: r.updated_at,
   }));
@@ -56,4 +59,14 @@ export async function replacePrizeImage(prizeType: PrizeType, bytes: Uint8Array)
     await removePrizeImage(res.previous_path).catch(() => undefined);
   }
   return prizeImageUrl(path);
+}
+
+/** Modifica nome e messaggio di vittoria (null/vuoto = messaggio predefinito). */
+export async function updatePrize(prizeType: PrizeType, label: string, winMessage: string | null): Promise<boolean> {
+  const row = await callRpc<unknown | null>("admin_update_prize", {
+    p_prize_type: prizeType,
+    p_label: label,
+    p_win_message: winMessage,
+  });
+  return row !== null;
 }

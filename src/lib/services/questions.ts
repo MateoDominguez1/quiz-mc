@@ -1,7 +1,7 @@
 import "server-only";
 import { getRomeDateString } from "@/lib/date";
 import { callRpc } from "@/lib/supabase/server";
-import { PRIZE_TYPES, type AdminQuestion, type AdminStats, type AnswerLetter, type PrizeType, type QuestionInput } from "@/types/quiz";
+import { PRIZE_INFO, PRIZE_TYPES, type AdminQuestion, type AdminStats, type AnswerLetter, type PrizeType, type QuestionInput } from "@/types/quiz";
 
 interface QuestionRow {
   id: string;
@@ -94,14 +94,14 @@ export async function getStats(): Promise<AdminStats> {
     today_winners: number;
     average_age: number | string | null;
     age_brackets: { label: string; count: number | string; percent: number | string }[];
-    prizes_by_type: Record<PrizeType, { won: number; redeemed: number }>;
+    prizes_by_type: Record<PrizeType, { label?: string; won: number; redeemed: number }>;
     total_questions: number;
     active_questions: number;
   }>("admin_get_stats", { p_date: getRomeDateString() });
   const byType = {} as AdminStats["prizesByType"];
   for (const t of PRIZE_TYPES) {
     const v = s.prizes_by_type?.[t];
-    byType[t] = { won: Number(v?.won ?? 0), redeemed: Number(v?.redeemed ?? 0) };
+    byType[t] = { label: v?.label ?? PRIZE_INFO[t].label, won: Number(v?.won ?? 0), redeemed: Number(v?.redeemed ?? 0) };
   }
   return {
     date: s.date,

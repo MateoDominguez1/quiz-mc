@@ -41,7 +41,7 @@ Tutto è deciso dal server e dal database (domanda, verifica, premio, codici): d
 1. Crea un progetto su <https://supabase.com> (regione consigliata: **Central EU (Frankfurt)**).
 2. **SQL Editor → New query**: incolla tutto [`supabase/schema.sql`](supabase/schema.sql) e premi **Run**. Lo script crea tabelle, funzioni, permessi e il bucket di Storage **`prize-images`** (pubblico in lettura) per le foto dei premi.
 3. Configura le variabili d'ambiente (sezione 3) e pubblica (sezione 5).
-4. Entra in `/admin`: crea alcune domande **attive** e carica le tre foto in **Premi e foto**.
+4. Entra in `/admin`: crea alcune domande **attive** e carica le tre foto in **Premi**.
 
 ## 2. Aggiornamento dalla versione precedente
 
@@ -50,7 +50,7 @@ La versione precedente usava una sola domanda al giorno uguale per tutti. Per ag
 1. **Prima** di pubblicare il nuovo codice, riesegui l'intero `supabase/schema.sql` nel SQL Editor (è idempotente: aggiunge le nuove tabelle e funzioni; le vecchie tabelle `daily_questions` e `responses` restano come storico).
 2. Aggiungi su Vercel le nuove variabili **`CASSA_USERNAME`** e **`CASSA_PASSWORD`**.
 3. Pubblica il codice (push su `main` → deploy automatico).
-4. In `/admin → Premi e foto` carica le foto di braccialetto, cono e caffè.
+4. In `/admin → Premi` carica le foto (e, se vuoi, cambia nomi e messaggi).
 
 > Dopo l'aggiornamento gli amministratori dovranno accedere di nuovo (il cookie di sessione è cambiato).
 
@@ -106,7 +106,7 @@ Altri comandi: `npm run build`, `npm test`, `npm run lint`.
 
 - **Dashboard**: totale partecipanti, vincitori, premi riscattati e da ritirare (cumulativi), età media e distribuzione per fascia d'età, premi per tipo. Si aggiorna ogni 30 secondi.
 - **Gestione delle domande**: crea, modifica, attiva/disattiva, elimina.
-- **Premi e foto**: carica o sostituisci la foto di ogni premio (viene ridimensionata a 900 px in WebP nel browser prima dell'invio).
+- **Premi**: per ogni premio puoi cambiare **nome**, **messaggio per il vincitore** (facoltativo) e **foto** (ridimensionata a 900 px in WebP nel browser prima dell'invio). Le fasce d'età restano fisse. Il nuovo nome compare subito al vincitore, in cassa e nelle statistiche, anche per i codici già emessi.
 - **Azzera statistiche** (in fondo alla Dashboard): azzera partecipanti, vincitori, premi ed età, con doppia conferma (scelta della modalità + parola `AZZERA`). Modalità consigliata *Conserva i premi da ritirare*: i codici non ancora consegnati restano validi. Domande e foto non vengono toccate. Irreversibile.
 
 **Premi per età** (decisi solo dal database):
@@ -186,6 +186,7 @@ Altri comandi: `npm run build`, `npm test`, `npm run lint`.
 | PATCH | `/api/admin/questions/:id/status` | admin |
 | POST | `/api/admin/stats/reset` `{ mode, confirm: "AZZERA" }` | admin |
 | GET | `/api/admin/prizes` | admin |
+| PATCH | `/api/admin/prizes/:type` `{ label, winMessage }` | admin |
 | POST | `/api/admin/prizes/:type/image` (multipart) | admin |
 
 ## 11. Test

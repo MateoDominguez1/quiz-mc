@@ -83,6 +83,23 @@ insert into public.prize_settings (prize_type, label) values
   ('caffe', 'Caffè')
 on conflict (prize_type) do nothing;
 
+-- Messaggio di vittoria personalizzabile dall'amministratore (null = predefinito).
+alter table public.prize_settings add column if not exists win_message text;
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'prize_settings_label_len') then
+    alter table public.prize_settings
+      add constraint prize_settings_label_len check (char_length(btrim(label)) between 1 and 40);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'prize_settings_win_message_len') then
+    alter table public.prize_settings
+      add constraint prize_settings_win_message_len
+      check (win_message is null or char_length(btrim(win_message)) between 1 and 120);
+  end if;
+end;
+$$;
+
 -- -----------------------------------------------------------------------------
 --  Partecipanti (una partecipazione = un QR = una domanda = una risposta)
 -- -----------------------------------------------------------------------------
@@ -400,6 +417,7 @@ as $$
     'prize',          case when pc.id is null then null else jsonb_build_object(
                         'type', pc.prize_type,
                         'label', ps.label,
+                        'win_message', ps.win_message,
                         'image_path', ps.image_path,
                         'code', pc.code,
                         'status', pc.status,
@@ -823,6 +841,7 @@ as $$
                            cross join lateral (select count(*)::numeric as n from public.participants p
                                                 where p.age between b.lo and b.hi) c),
     'prizes_by_type',      (select coalesce(jsonb_object_agg(ps.prize_type, jsonb_build_object(
+                               'label', ps.label,
                                'won', (select count(*) from public.prize_codes pc where pc.prize_type = ps.prize_type),
                                'redeemed', (select count(*) from public.prize_codes pc
                                              where pc.prize_type = ps.prize_type and pc.status = 'redeemed'))), '{}'::jsonb)
@@ -898,10 +917,35 @@ set search_path = public
 as $$
   select coalesce(jsonb_agg(row_to_json(t) order by t.ord), '[]'::jsonb)
   from (
-    select ps.prize_type, ps.label, ps.image_path, ps.updated_at,
+    select ps.prize_type, ps.label, ps.win_message, ps.image_path, ps.updated_at,
            case ps.prize_type when 'braccialetto' then 1 when 'cono' then 2 else 3 end as ord
     from public.prize_settings ps
   ) t;
+$$;
+
+-- Modifica nome e messaggio di vittoria di un premio.
+-- La fascia d'età resta fissa: il premio è sempre deciso da prize_for_age().
+create or replace function public.admin_update_prize(p_prize_type text, p_label text, p_win_message text)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public
+as $$
+declare
+  v_row public.prize_settings%rowtype;
+begin
+  update public.prize_settings
+     set label = btrim(p_label),
+         win_message = nullif(btrim(coalesce(p_win_message, '')), ''),
+         updated_at = now()
+   where prize_type = p_prize_type
+  returning * into v_row;
+  if not found then
+    return null;
+  end if;
+  return to_jsonb(v_row);
+end;
 $$;
 
 -- Imposta la nuova foto e restituisce il percorso precedente (da eliminare).
@@ -979,7 +1023,8 @@ begin
     'public.admin_get_stats(date)',
     'public.admin_list_prize_settings()',
     'public.admin_set_prize_image(text, text)',
-    'public.admin_reset_stats(boolean)'
+    'public.admin_reset_stats(boolean)',
+    'public.admin_update_prize(text, text, text)'
   ]
   loop
     execute format('revoke all on function %s from public, anon, authenticated', fn);

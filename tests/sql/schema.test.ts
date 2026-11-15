@@ -352,7 +352,7 @@ describe("statistiche cumulative", () => {
       "0–10": 1, "11–17": 1, "18–29": 1, "30–44": 1, "45–64": 0, "65+": 1,
     });
     expect(br.reduce((a, b) => a + Number(b.percent), 0)).toBeCloseTo(100, 0);
-    expect((s.prizes_by_type as Record<string, { won: number; redeemed: number }>).braccialetto).toEqual({ won: 1, redeemed: 1 });
+    expect((s.prizes_by_type as Record<string, { won: number; redeemed: number }>).braccialetto).toMatchObject({ label: "Braccialetto", won: 1, redeemed: 1 });
   });
 
   it("database vuoto", async () => {
@@ -414,6 +414,37 @@ describe("azzeramento statistiche", () => {
     await db.exec("set role anon");
     await expect(db.query("select public.admin_reset_stats(false)")).rejects.toThrow();
     await db.exec("reset role");
+  });
+});
+
+describe("nomi dei premi", () => {
+  it("l'admin rinomina il premio e il nuovo nome compare ovunque", async () => {
+    const upd = await rpc("public.admin_update_prize('caffe', '  Cappuccino ', 'Complimenti! Hai vinto un cappuccino!')");
+    expect(upd).toMatchObject({ label: "Cappuccino", win_message: "Complimenti! Hai vinto un cappuccino!" });
+
+    await createQuestion("D", "A");
+    const pid = await join_(40);
+    await rpc("public.submit_participant_answer($1::uuid, 'A')", [pid]);
+    const st = await rpc<{ prize: { type: string; label: string; win_message: string; code: string } }>(
+      "public.get_participant_state($1::uuid)",
+      [pid],
+    );
+    // Il tipo (deciso dall'età) non cambia; cambiano nome e messaggio.
+    expect(st.prize).toMatchObject({ type: "caffe", label: "Cappuccino", win_message: "Complimenti! Hai vinto un cappuccino!" });
+    expect((await rpc("public.cassa_lookup_prize($1)", [st.prize.code])).label).toBe("Cappuccino");
+    const stats = await rpc<{ prizes_by_type: Record<string, { label: string }> }>("public.admin_get_stats(null)");
+    expect(stats.prizes_by_type.caffe.label).toBe("Cappuccino");
+    const list = await rpc<{ prize_type: string; label: string }[]>("public.admin_list_prize_settings()");
+    expect(list.find((p) => p.prize_type === "caffe")?.label).toBe("Cappuccino");
+  });
+
+  it("messaggio vuoto = messaggio predefinito; nome vuoto o troppo lungo rifiutato", async () => {
+    const upd = await rpc("public.admin_update_prize('cono', 'Gelato', '   ')");
+    expect(upd.win_message).toBeNull();
+    await expect(rpc("public.admin_update_prize('cono', '   ', null)")).rejects.toThrow();
+    await expect(rpc("public.admin_update_prize('cono', $1, null)", ["x".repeat(41)])).rejects.toThrow();
+    await expect(rpc("public.admin_update_prize('cono', 'Ok', $1)", ["x".repeat(121)])).rejects.toThrow();
+    expect(await rpc("public.admin_update_prize('pizza', 'Pizza', null)")).toBeNull();
   });
 });
 

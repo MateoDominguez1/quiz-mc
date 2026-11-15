@@ -95,3 +95,18 @@ export const resetStatsSchema = z.object({
   mode: z.enum(["all", "keep_pending"], { error: "Scegli cosa azzerare" }),
   confirm: z.literal(RESET_CONFIRM_WORD, { error: `Scrivi ${RESET_CONFIRM_WORD} per confermare` }),
 });
+
+export const prizeUpdateSchema = z.object({
+  label: z
+    .string({ error: "Inserisci il nome del premio" })
+    .trim()
+    .min(1, { error: "Inserisci il nome del premio" })
+    .max(40, { error: "Nome: massimo 40 caratteri" }),
+  winMessage: z
+    .string()
+    .trim()
+    .max(120, { error: "Messaggio: massimo 120 caratteri" })
+    .nullable()
+    .optional()
+    .transform((v) => (v ? v : null)),
+});

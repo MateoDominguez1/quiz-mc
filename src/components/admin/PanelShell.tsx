@@ -42,7 +42,7 @@ const VARIANTS: Record<"admin" | "cassa", { title: string; nav: NavItem[] }> = {
         match: (p) => p === "/admin/domande" || (p.startsWith("/admin/domande/") && !p.endsWith("/nuova")),
       },
       { href: "/admin/domande/nuova", label: "Nuova domanda", short: "Nuova", icon: PlusCircle },
-      { href: "/admin/premi", label: "Premi e foto", short: "Premi", icon: Gift },
+      { href: "/admin/premi", label: "Premi", short: "Premi", icon: Gift },
     ],
   },
   cassa: {

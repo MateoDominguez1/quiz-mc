@@ -2,7 +2,7 @@ import "server-only";
 import { getRomeDateString } from "@/lib/date";
 import { callRpc } from "@/lib/supabase/server";
 import { prizeImageUrl } from "@/lib/supabase/storage";
-import type { AnswerLetter, ParticipantState, PrizeType, PublicQuestion } from "@/types/quiz";
+import { winMessageFor, type AnswerLetter, type ParticipantState, type PrizeType, type PublicQuestion } from "@/types/quiz";
 
 interface QuestionRow {
   id: string;
@@ -21,6 +21,7 @@ interface StateRow {
   prize: {
     type: PrizeType;
     label: string;
+    win_message: string | null;
     image_path: string | null;
     code: string;
     status: "pending" | "redeemed";
@@ -86,6 +87,7 @@ export async function getParticipantState(participantId: string | null): Promise
         prize: {
           type: row.prize.type,
           label: row.prize.label,
+          winMessage: winMessageFor(row.prize.type, row.prize.label, row.prize.win_message),
           imageUrl: prizeImageUrl(row.prize.image_path),
           code: row.prize.code,
           status: row.prize.status,

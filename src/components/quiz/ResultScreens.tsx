@@ -6,7 +6,7 @@ import { BrandLogo } from "@/components/brand/BrandLogo";
 import { Confetti } from "@/components/quiz/Confetti";
 import { PrizeImage } from "@/components/quiz/PrizeImage";
 import { formatItalianDateTime } from "@/lib/date";
-import { PRIZE_INFO, type WonPrize } from "@/types/quiz";
+import type { WonPrize } from "@/types/quiz";
 
 export function WinScreen({ prize }: { prize: WonPrize }) {
   const [celebrating, setCelebrating] = useState(prize.status === "pending");
@@ -25,7 +25,7 @@ export function WinScreen({ prize }: { prize: WonPrize }) {
           COMPLIMENTI!
         </h1>
         <p className="mt-2 animate-fade-up text-xl font-extrabold leading-snug" style={{ animationDelay: "0.1s" }}>
-          {PRIZE_INFO[prize.type].winMessage}
+          {prize.winMessage}
         </p>
 
         <div className="mt-5 animate-pop-in" style={{ animationDelay: "0.15s" }}>

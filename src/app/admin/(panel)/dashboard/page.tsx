@@ -109,7 +109,7 @@ export default async function DashboardPage() {
               Premi per tipo
             </h2>
             <Link href="/admin/premi" className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-neutral-100 px-3 text-sm font-bold hover:bg-neutral-200">
-              <Gift className="size-4" aria-hidden /> Foto premi
+              <Gift className="size-4" aria-hidden /> Modifica premi
             </Link>
           </div>
           <ul className="space-y-3">
@@ -118,7 +118,7 @@ export default async function DashboardPage() {
               return (
                 <li key={t} className="rounded-2xl bg-neutral-50 px-4 py-3">
                   <div className="flex items-baseline justify-between gap-2">
-                    <span className="font-black">{PRIZE_INFO[t].label}</span>
+                    <span className="font-black">{p.label}</span>
                     <span className="text-xs font-bold text-neutral-500">{PRIZE_INFO[t].ages}</span>
                   </div>
                   <p className="mt-1 text-sm font-semibold text-ink-soft">

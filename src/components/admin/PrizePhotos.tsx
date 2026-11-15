@@ -1,12 +1,13 @@
 "use client";
 
-import { ImageUp } from "lucide-react";
+import { ImageUp, Save } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { useToast } from "@/components/admin/Toast";
 import { PrizeImage } from "@/components/quiz/PrizeImage";
 import { Spinner } from "@/components/ui/Spinner";
-import { PRIZE_INFO, type PrizeSetting, type PrizeType } from "@/types/quiz";
+import { apiFetch } from "@/lib/client/api";
+import { PRIZE_INFO, winMessageFor, type PrizeSetting, type PrizeType } from "@/types/quiz";
 
 const MAX_SIDE = 900;
 
@@ -43,6 +44,38 @@ function PrizeCard({ prize }: { prize: PrizeSetting }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [imageUrl, setImageUrl] = useState(prize.imageUrl);
+  const [label, setLabel] = useState(prize.label);
+  const [savedLabel, setSavedLabel] = useState(prize.label);
+  const [message, setMessage] = useState(prize.winMessage ?? "");
+  const [savedMessage, setSavedMessage] = useState(prize.winMessage ?? "");
+  const [saving, setSaving] = useState(false);
+  const dirty = label.trim() !== savedLabel || message.trim() !== savedMessage;
+
+  async function saveTexts(e: FormEvent) {
+    e.preventDefault();
+    if (saving || !dirty) return;
+    if (!label.trim()) {
+      toast.show("error", "Inserisci il nome del premio.");
+      return;
+    }
+    setSaving(true);
+    const res = await apiFetch(`/api/admin/prizes/${prize.type}`, {
+      method: "PATCH",
+      body: { label: label.trim(), winMessage: message.trim() || null },
+    });
+    setSaving(false);
+    if (res.ok) {
+      setLabel(label.trim());
+      setSavedLabel(label.trim());
+      setMessage(message.trim());
+      setSavedMessage(message.trim());
+      toast.show("success", `Premio "${label.trim()}" aggiornato.`);
+      router.refresh();
+    } else {
+      if (res.status === 401) router.replace("/admin");
+      toast.show("error", res.error ?? "Salvataggio non riuscito.");
+    }
+  }
 
   async function onFile(file: File | undefined) {
     if (!file || uploading) return;
@@ -59,7 +92,7 @@ function PrizeCard({ prize }: { prize: PrizeSetting }) {
       const data = (await res.json().catch(() => null)) as { ok?: boolean; imageUrl?: string; error?: string } | null;
       if (res.ok && data?.ok) {
         setImageUrl(data.imageUrl ?? null);
-        toast.show("success", `Foto del premio "${prize.label}" aggiornata.`);
+        toast.show("success", `Foto del premio "${savedLabel}" aggiornata.`);
         router.refresh();
       } else {
         if (res.status === 401) router.replace("/admin");
@@ -76,8 +109,8 @@ function PrizeCard({ prize }: { prize: PrizeSetting }) {
   const info = PRIZE_INFO[prize.type as PrizeType];
   return (
     <li className="flex flex-col items-center rounded-3xl bg-white p-5 text-center shadow-sm">
-      <PrizeImage type={prize.type} label={prize.label} imageUrl={imageUrl} className="size-44" />
-      <p className="mt-4 text-xl font-black">{prize.label}</p>
+      <PrizeImage type={prize.type} label={savedLabel} imageUrl={imageUrl} className="size-44" />
+      <p className="mt-4 text-xl font-black">{savedLabel}</p>
       <p className="text-sm font-bold text-ink-soft">{info.ages}</p>
       <p className="mt-1 text-xs font-semibold text-neutral-500">{imageUrl ? "Foto caricata" : "Nessuna foto: viene mostrata un'icona"}</p>
       <input
@@ -95,6 +128,44 @@ function PrizeCard({ prize }: { prize: PrizeSetting }) {
         {uploading ? <Spinner /> : <ImageUp className="size-5" aria-hidden />}
         {uploading ? "Caricamento…" : imageUrl ? "Sostituisci foto" : "Carica foto"}
       </label>
+
+      <form onSubmit={saveTexts} noValidate className="mt-5 w-full space-y-3 border-t border-neutral-100 pt-4 text-left">
+        <div className="space-y-1.5">
+          <label htmlFor={`label-${prize.type}`} className="block text-sm font-extrabold">
+            Nome del premio
+          </label>
+          <input
+            id={`label-${prize.type}`}
+            value={label}
+            maxLength={40}
+            onChange={(e) => setLabel(e.target.value)}
+            className="h-12 w-full rounded-2xl border-2 border-neutral-200 bg-white px-4 font-bold outline-none focus:border-brand-yellow-dark focus:ring-4 focus:ring-brand-yellow/30"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <label htmlFor={`msg-${prize.type}`} className="block text-sm font-extrabold">
+            Messaggio per il vincitore <span className="font-semibold text-neutral-500">(facoltativo)</span>
+          </label>
+          <textarea
+            id={`msg-${prize.type}`}
+            value={message}
+            maxLength={120}
+            rows={2}
+            onChange={(e) => setMessage(e.target.value)}
+            placeholder={winMessageFor(prize.type, label || savedLabel, null)}
+            className="w-full resize-none rounded-2xl border-2 border-neutral-200 bg-white px-4 py-2.5 font-semibold outline-none focus:border-brand-yellow-dark focus:ring-4 focus:ring-brand-yellow/30"
+          />
+          <p className="text-xs font-semibold text-neutral-500">Se lo lasci vuoto viene mostrato il testo suggerito.</p>
+        </div>
+        <button
+          type="submit"
+          disabled={!dirty || saving}
+          className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-ink font-black text-white disabled:bg-neutral-200 disabled:text-neutral-500"
+        >
+          {saving ? <Spinner /> : <Save className="size-5" aria-hidden />}
+          {saving ? "Salvataggio…" : dirty ? "Salva nome e messaggio" : "Salvato"}
+        </button>
+      </form>
     </li>
   );
 }

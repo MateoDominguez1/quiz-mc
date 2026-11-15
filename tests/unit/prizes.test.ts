@@ -28,3 +28,12 @@ describe("riconoscimento formato immagini", () => {
     expect(detectImageType(new Uint8Array([0xff, 0xd8]))).toBeNull();
   });
 });
+
+describe("messaggio di vittoria", () => {
+  it("usa il messaggio personalizzato, poi quello predefinito, poi uno generico", async () => {
+    const { winMessageFor } = await import("@/types/quiz");
+    expect(winMessageFor("cono", "Gelato", "Bravo! Un gelato per te!")).toBe("Bravo! Un gelato per te!");
+    expect(winMessageFor("cono", "Cono", null)).toBe("Complimenti! Hai vinto un cono!");
+    expect(winMessageFor("caffe", "Cappuccino", "  ")).toBe("Complimenti! Hai vinto: Cappuccino!");
+  });
+});

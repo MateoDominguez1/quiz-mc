@@ -87,3 +87,11 @@ export function fieldErrors(error: z.ZodError): Record<string, string> {
   }
   return out;
 }
+
+/** Parola da digitare per confermare l'azzeramento delle statistiche. */
+export const RESET_CONFIRM_WORD = "AZZERA";
+
+export const resetStatsSchema = z.object({
+  mode: z.enum(["all", "keep_pending"], { error: "Scegli cosa azzerare" }),
+  confirm: z.literal(RESET_CONFIRM_WORD, { error: `Scrivi ${RESET_CONFIRM_WORD} per confermare` }),
+});

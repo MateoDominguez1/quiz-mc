@@ -122,3 +122,26 @@ export async function getStats(): Promise<AdminStats> {
     activeQuestions: Number(s.active_questions),
   };
 }
+
+export interface ResetResult {
+  participantsDeleted: number;
+  prizesDeleted: number;
+  entriesDeleted: number;
+  pendingKept: number;
+}
+
+/** Azzera le statistiche (domande e foto restano). Operazione irreversibile. */
+export async function resetStats(keepPending: boolean): Promise<ResetResult> {
+  const r = await callRpc<{
+    participants_deleted: number;
+    prizes_deleted: number;
+    entries_deleted: number;
+    pending_kept: number;
+  }>("admin_reset_stats", { p_keep_pending: keepPending });
+  return {
+    participantsDeleted: Number(r.participants_deleted),
+    prizesDeleted: Number(r.prizes_deleted),
+    entriesDeleted: Number(r.entries_deleted),
+    pendingKept: Number(r.pending_kept),
+  };
+}

@@ -362,6 +362,61 @@ describe("statistiche cumulative", () => {
   });
 });
 
+describe("azzeramento statistiche", () => {
+  async function scenario() {
+    await createQuestion("D", "A");
+    const winners: string[] = [];
+    for (const age of [8, 30, 15]) {
+      const pid = await join_(age);
+      await rpc("public.submit_participant_answer($1::uuid, 'A')", [pid]);
+      const st = await rpc<{ prize: { code: string } }>("public.get_participant_state($1::uuid)", [pid]);
+      winners.push(st.prize.code);
+    }
+    const loser = await join_(50);
+    await rpc("public.submit_participant_answer($1::uuid, 'B')", [loser]);
+    await rpc("public.cassa_redeem_prize($1, 'cassa')", [winners[0]]);
+    const unused = await createEntry();
+    return { winners, unused };
+  }
+
+  it("azzera tutto ma conserva domande e foto", async () => {
+    const { winners, unused } = await scenario();
+    await rpc("public.admin_set_prize_image('cono', 'cono.webp')");
+    const res = await rpc("public.admin_reset_stats(false)");
+    expect(res).toMatchObject({ participants_deleted: 4, prizes_deleted: 3, pending_kept: 0 });
+
+    const s = await rpc<Record<string, unknown>>("public.admin_get_stats(null)");
+    expect([s.total_participants, s.total_winners, s.prizes_redeemed, s.prizes_pending]).toEqual([0, 0, 0, 0]);
+    expect(s.average_age).toBeNull();
+    expect(s.total_questions).toBe(1);
+    expect((await rpc("public.cassa_lookup_prize($1)", [winners[1]])).status).toBe("not_found");
+    expect((await rpc("public.entry_status($1, null)", [unused.hash])).status).toBe("invalid");
+    const photos = await rpc<{ image_path: string | null }[]>("public.admin_list_prize_settings()");
+    expect(photos[1].image_path).toBe("cono.webp");
+    // Il quiz continua a funzionare dopo l'azzeramento.
+    await join_(20);
+  });
+
+  it("conserva i premi da ritirare se richiesto", async () => {
+    const { winners } = await scenario();
+    const res = await rpc("public.admin_reset_stats(true)");
+    expect(res).toMatchObject({ participants_deleted: 2, prizes_deleted: 1, pending_kept: 2 });
+
+    const s = await rpc<Record<string, unknown>>("public.admin_get_stats(null)");
+    expect([s.total_participants, s.total_winners, s.prizes_redeemed, s.prizes_pending]).toEqual([2, 2, 0, 2]);
+    // I codici non ancora ritirati restano validi e riscattabili.
+    expect((await rpc("public.cassa_lookup_prize($1)", [winners[1]])).status).toBe("pending");
+    expect((await rpc("public.cassa_redeem_prize($1, 'cassa')", [winners[2]])).status).toBe("redeemed");
+    expect((await rpc("public.cassa_lookup_prize($1)", [winners[0]])).status).toBe("not_found");
+  });
+
+  it("anon non può azzerare", async () => {
+    await db.exec("set role anon");
+    await expect(db.query("select public.admin_reset_stats(false)")).rejects.toThrow();
+    await db.exec("reset role");
+  });
+});
+
 describe("foto premi", () => {
   it("restituisce il percorso precedente per poterlo eliminare", async () => {
     const a = await rpc("public.admin_set_prize_image('cono', 'cono-1.webp')");

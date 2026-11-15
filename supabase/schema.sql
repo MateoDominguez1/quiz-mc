@@ -832,6 +832,63 @@ as $$
   );
 $$;
 
+-- Azzeramento delle statistiche (domande e foto dei premi restano).
+-- p_keep_pending = true: conserva i vincitori con premio ancora da ritirare,
+-- così i loro codici restano validi. Tutto in un'unica transazione.
+create or replace function public.admin_reset_stats(p_keep_pending boolean)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public
+as $$
+declare
+  v_participants integer;
+  v_prizes       integer;
+  v_entries      integer;
+  v_kept         integer := 0;
+begin
+  -- Serializza con le assegnazioni in corso.
+  perform pg_advisory_xact_lock(hashtext('quiz_reset'));
+
+  if p_keep_pending then
+    select count(*) into v_kept from public.prize_codes where status = 'pending';
+
+    delete from public.prize_codes pc
+     where pc.status <> 'pending';
+    get diagnostics v_prizes = row_count;
+
+    delete from public.participants p
+     where not exists (select 1 from public.prize_codes pc
+                        where pc.participant_id = p.id and pc.status = 'pending');
+    get diagnostics v_participants = row_count;
+
+    delete from public.entry_qr_codes e
+     where e.participant_id is null
+        or not exists (select 1 from public.participants p where p.id = e.participant_id);
+    get diagnostics v_entries = row_count;
+  else
+    delete from public.prize_codes;
+    get diagnostics v_prizes = row_count;
+    delete from public.daily_question_assignments;
+    delete from public.entry_qr_codes;
+    get diagnostics v_entries = row_count;
+    delete from public.participants;
+    get diagnostics v_participants = row_count;
+    -- Storico della versione precedente.
+    delete from public.responses;
+    delete from public.daily_questions;
+  end if;
+
+  return jsonb_build_object(
+    'participants_deleted', v_participants,
+    'prizes_deleted',       v_prizes,
+    'entries_deleted',      v_entries,
+    'pending_kept',         v_kept
+  );
+end;
+$$;
+
 create or replace function public.admin_list_prize_settings()
 returns jsonb
 language sql
@@ -921,7 +978,8 @@ begin
     'public.admin_delete_question(uuid)',
     'public.admin_get_stats(date)',
     'public.admin_list_prize_settings()',
-    'public.admin_set_prize_image(text, text)'
+    'public.admin_set_prize_image(text, text)',
+    'public.admin_reset_stats(boolean)'
   ]
   loop
     execute format('revoke all on function %s from public, anon, authenticated', fn);

@@ -1,5 +1,6 @@
 import { CalendarDays, CircleHelp, Gift, PackageCheck, PackageOpen, Trophy, TriangleAlert, Users } from "lucide-react";
 import Link from "next/link";
+import { ResetStats } from "@/components/admin/ResetStats";
 import { AutoRefresh } from "@/components/ui/AutoRefresh";
 import { formatItalianDate } from "@/lib/date";
 import { getStats } from "@/lib/services/questions";
@@ -141,6 +142,8 @@ export default async function DashboardPage() {
           Gestione delle domande
         </Link>
       </section>
+
+      <ResetStats pendingPrizes={s.prizesPending} />
     </div>
   );
 }

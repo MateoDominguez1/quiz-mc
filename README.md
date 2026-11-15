@@ -107,6 +107,7 @@ Altri comandi: `npm run build`, `npm test`, `npm run lint`.
 - **Dashboard**: totale partecipanti, vincitori, premi riscattati e da ritirare (cumulativi), età media e distribuzione per fascia d'età, premi per tipo. Si aggiorna ogni 30 secondi.
 - **Gestione delle domande**: crea, modifica, attiva/disattiva, elimina.
 - **Premi e foto**: carica o sostituisci la foto di ogni premio (viene ridimensionata a 900 px in WebP nel browser prima dell'invio).
+- **Azzera statistiche** (in fondo alla Dashboard): azzera partecipanti, vincitori, premi ed età, con doppia conferma (scelta della modalità + parola `AZZERA`). Modalità consigliata *Conserva i premi da ritirare*: i codici non ancora consegnati restano validi. Domande e foto non vengono toccate. Irreversibile.
 
 **Premi per età** (decisi solo dal database):
 
@@ -183,6 +184,7 @@ Altri comandi: `npm run build`, `npm test`, `npm run lint`.
 | GET, POST | `/api/admin/questions` | admin |
 | GET, PUT, DELETE | `/api/admin/questions/:id` | admin |
 | PATCH | `/api/admin/questions/:id/status` | admin |
+| POST | `/api/admin/stats/reset` `{ mode, confirm: "AZZERA" }` | admin |
 | GET | `/api/admin/prizes` | admin |
 | POST | `/api/admin/prizes/:type/image` (multipart) | admin |
 

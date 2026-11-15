@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleCheck, CircleX, Clock, CreditCard, Plus, RotateCcw } from "lucide-react";
+import { CircleCheck, CircleX, Clock, CreditCard, Plus, RefreshCw, RotateCcw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useToast } from "@/components/admin/Toast";
@@ -16,6 +16,14 @@ interface Entry {
 
 type EntryStatus = "pending" | "used" | "cancelled" | "expired";
 
+/**
+ * Controllo automatico dello stato del QR: ogni 5 secondi e solo per i primi
+ * 3 minuti (e solo con la pagina visibile), per contenere il consumo del
+ * server. Dopo, l'operatore può verificare a mano con "Controlla stato".
+ */
+const POLL_INTERVAL_MS = 5000;
+const POLL_WINDOW_MS = 3 * 60 * 1000;
+
 function minutesLeft(expiresAt: string, now: number) {
   return Math.max(0, Math.ceil((new Date(expiresAt).getTime() - now) / 60000));
 }
@@ -28,7 +36,16 @@ export function NewEntry() {
   const [creating, setCreating] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const [createdAt, setCreatedAt] = useState(0);
+  const [checking, setChecking] = useState(false);
   const inFlight = useRef(false);
+  const autoCheck = entry !== null && status === "pending" && now - createdAt < POLL_WINDOW_MS;
+
+  const checkStatus = useCallback(async (id: string) => {
+    const res = await apiFetch<{ status: EntryStatus }>(`/api/cassa/entries/${id}`);
+    if (res.ok && res.data && res.data.status !== "pending") setStatus(res.data.status);
+    return res.ok;
+  }, []);
 
   const create = useCallback(async () => {
     if (inFlight.current) return;
@@ -40,24 +57,40 @@ export function NewEntry() {
     if (res.ok && res.data) {
       setEntry(res.data);
       setStatus("pending");
-      setNow(Date.now());
+      const t = Date.now();
+      setNow(t);
+      setCreatedAt(t);
     } else {
       if (res.status === 401) router.replace("/cassa");
       toast.show("error", res.error ?? "Impossibile generare il QR code.");
     }
   }, [toast, router]);
 
-  // Aggiorna lo stato del QR: si sa subito quando il cliente lo ha scansionato.
+  // Orologio per il conto alla rovescia (nessuna chiamata al server).
   useEffect(() => {
     if (!entry || status !== "pending") return;
-    const id = entry.id;
-    const timer = setInterval(async () => {
-      setNow(Date.now());
-      const res = await apiFetch<{ status: EntryStatus }>(`/api/cassa/entries/${id}`);
-      if (res.ok && res.data && res.data.status !== "pending") setStatus(res.data.status);
-    }, 3000);
+    const timer = setInterval(() => setNow(Date.now()), 5000);
     return () => clearInterval(timer);
   }, [entry, status]);
+
+  // Controllo automatico limitato (vedi POLL_*).
+  useEffect(() => {
+    if (!entry || !autoCheck) return;
+    const id = entry.id;
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") void checkStatus(id);
+    }, POLL_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [entry, autoCheck, checkStatus]);
+
+  async function manualCheck() {
+    if (!entry || checking) return;
+    setChecking(true);
+    const ok = await checkStatus(entry.id);
+    setChecking(false);
+    setNow(Date.now());
+    if (!ok) toast.show("error", "Impossibile verificare lo stato. Riprova.");
+  }
 
   async function cancel() {
     if (!entry || cancelling) return;
@@ -110,9 +143,21 @@ export function NewEntry() {
               // SVG generato dal server con la libreria qrcode (nessun input utente).
               dangerouslySetInnerHTML={{ __html: entry.svg }}
             />
-            <p className="mt-4 flex items-center justify-center gap-2 font-bold text-ink-soft">
-              <Spinner className="size-4" /> In attesa della scansione…
-            </p>
+            {autoCheck ? (
+              <p className="mt-4 flex items-center justify-center gap-2 font-bold text-ink-soft">
+                <Spinner className="size-4" /> In attesa della scansione…
+              </p>
+            ) : (
+              <button
+                type="button"
+                onClick={manualCheck}
+                disabled={checking}
+                className="mx-auto mt-4 flex h-12 items-center gap-2 rounded-2xl bg-neutral-100 px-5 font-black text-ink hover:bg-neutral-200 disabled:opacity-60"
+              >
+                {checking ? <Spinner /> : <RefreshCw className="size-5" aria-hidden />}
+                Controlla stato
+              </button>
+            )}
             <p className="mt-1 flex items-center justify-center gap-1.5 text-sm font-semibold text-neutral-500">
               <Clock className="size-4" aria-hidden /> Valido una sola volta · scade tra {left} {left === 1 ? "minuto" : "minuti"}
             </p>

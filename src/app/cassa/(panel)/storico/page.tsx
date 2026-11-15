@@ -8,7 +8,7 @@ export default async function HistoryPage() {
   const { items, redeemedToday, pendingTotal } = await listRedemptions(100);
   return (
     <div className="mx-auto max-w-3xl animate-fade-up space-y-5">
-      <AutoRefresh seconds={30} />
+      <AutoRefresh seconds={60} />
       <h1 className="text-2xl font-black text-ink sm:text-3xl">Storico riscossioni</h1>
 
       <div className="grid grid-cols-2 gap-3">

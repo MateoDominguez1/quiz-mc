@@ -98,13 +98,13 @@ Altri comandi: `npm run build`, `npm test`, `npm run lint`.
 
 **Cassa (`/cassa`)** – utilizzabile da smartphone, tablet o PC:
 
-- **Nuova partecipazione** → "Pagamento ricevuto" → il QR appare sullo schermo. La schermata si aggiorna da sola quando il cliente lo usa ("QR code utilizzato"). "Annulla QR" lo invalida se il cliente rinuncia.
+- **Nuova partecipazione** → "Pagamento ricevuto" → il QR appare sullo schermo. La schermata si aggiorna da sola quando il cliente lo usa ("QR code utilizzato"): controlla ogni 5 secondi per i primi 3 minuti, poi c'è il pulsante "Controlla stato". "Annulla QR" lo invalida se il cliente rinuncia.
 - **Riscatta un premio** → digita il codice (vanno bene anche minuscole, spazi o solo le 6 lettere finali) → "Verifica codice" → "Conferma consegna".
 - **Storico riscossioni** → ultimi premi consegnati con data e ora.
 
 **Amministrazione (`/admin`)**:
 
-- **Dashboard**: totale partecipanti, vincitori, premi riscattati e da ritirare (cumulativi), età media e distribuzione per fascia d'età, premi per tipo. Si aggiorna ogni 30 secondi.
+- **Dashboard**: totale partecipanti, vincitori, premi riscattati e da ritirare (cumulativi), età media e distribuzione per fascia d'età, premi per tipo. Si aggiorna ogni 60 secondi.
 - **Gestione delle domande**: crea, modifica, attiva/disattiva, elimina.
 - **Premi**: per ogni premio puoi cambiare **nome**, **messaggio per il vincitore** (facoltativo) e **foto** (ridimensionata a 900 px in WebP nel browser prima dell'invio). Le fasce d'età restano fisse. Il nuovo nome compare subito al vincitore, in cassa e nelle statistiche, anche per i codici già emessi.
 - **Azzera statistiche** (in fondo alla Dashboard): azzera partecipanti, vincitori, premi ed età, con doppia conferma (scelta della modalità + parola `AZZERA`). Modalità consigliata *Conserva i premi da ritirare*: i codici non ancora consegnati restano validi. Domande e foto non vengono toccate. Irreversibile.

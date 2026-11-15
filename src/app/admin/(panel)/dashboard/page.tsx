@@ -30,7 +30,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="animate-fade-up space-y-6">
-      <AutoRefresh seconds={30} />
+      <AutoRefresh seconds={60} />
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl font-black text-ink sm:text-3xl">Dashboard</h1>
         <p className="flex items-center gap-2 font-semibold text-ink-soft">

@@ -1,7 +1,7 @@
 import "server-only";
 import { getRomeDateString } from "@/lib/date";
 import { callRpc } from "@/lib/supabase/server";
-import type { AdminQuestion, AdminStats, AnswerLetter, QuestionInput } from "@/types/quiz";
+import { PRIZE_TYPES, type AdminQuestion, type AdminStats, type AnswerLetter, type PrizeType, type QuestionInput } from "@/types/quiz";
 
 interface QuestionRow {
   id: string;
@@ -86,27 +86,39 @@ export async function deleteQuestion(id: string): Promise<boolean> {
 export async function getStats(): Promise<AdminStats> {
   const s = await callRpc<{
     date: string;
-    total_questions: number;
-    active_questions: number;
-    never_used_active: number;
-    today_question: { id: string; question_text: string; correct_answer: string; is_active: boolean } | null;
+    total_participants: number;
+    total_winners: number;
+    prizes_redeemed: number;
+    prizes_pending: number;
     today_participants: number;
     today_winners: number;
+    average_age: number | string | null;
+    age_brackets: { label: string; count: number | string; percent: number | string }[];
+    prizes_by_type: Record<PrizeType, { won: number; redeemed: number }>;
+    total_questions: number;
+    active_questions: number;
   }>("admin_get_stats", { p_date: getRomeDateString() });
+  const byType = {} as AdminStats["prizesByType"];
+  for (const t of PRIZE_TYPES) {
+    const v = s.prizes_by_type?.[t];
+    byType[t] = { won: Number(v?.won ?? 0), redeemed: Number(v?.redeemed ?? 0) };
+  }
   return {
     date: s.date,
-    totalQuestions: Number(s.total_questions),
-    activeQuestions: Number(s.active_questions),
-    neverUsedActive: Number(s.never_used_active),
-    todayQuestion: s.today_question
-      ? {
-          id: s.today_question.id,
-          questionText: s.today_question.question_text,
-          correctAnswer: s.today_question.correct_answer.trim() as AnswerLetter,
-          isActive: s.today_question.is_active,
-        }
-      : null,
+    totalParticipants: Number(s.total_participants),
+    totalWinners: Number(s.total_winners),
+    prizesRedeemed: Number(s.prizes_redeemed),
+    prizesPending: Number(s.prizes_pending),
     todayParticipants: Number(s.today_participants),
     todayWinners: Number(s.today_winners),
+    averageAge: s.average_age === null ? null : Number(s.average_age),
+    ageBrackets: (s.age_brackets ?? []).map((b) => ({
+      label: b.label,
+      count: Number(b.count),
+      percent: Number(b.percent),
+    })),
+    prizesByType: byType,
+    totalQuestions: Number(s.total_questions),
+    activeQuestions: Number(s.active_questions),
   };
 }

@@ -1,24 +1,28 @@
 import "server-only";
+import { createHash, randomBytes } from "node:crypto";
+import { getSession } from "@/lib/auth/session";
 import { uuidSchema } from "@/lib/validation";
 
 /**
- * Identificativo anonimo del partecipante (UUID casuale in cookie httpOnly).
- * Non contiene dati personali: serve solo a impedire più risposte
- * nella stessa giornata dallo stesso browser.
+ * Token dei QR: 32 byte casuali (256 bit) in base64url, imprevedibili.
+ * Nel database viene salvato solo lo SHA-256 del token.
  */
-export const PARTICIPANT_COOKIE = "qdg_pid";
-
-export function parseParticipantId(value: string | undefined | null): string | null {
-  if (!value) return null;
-  return uuidSchema.safeParse(value).success ? value : null;
+export function generateEntryToken(): { token: string; hash: string } {
+  const token = randomBytes(32).toString("base64url");
+  return { token, hash: hashEntryToken(token) };
 }
 
-export function participantCookieOptions() {
-  return {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax" as const,
-    path: "/",
-    maxAge: 60 * 60 * 24 * 365,
-  };
+export function hashEntryToken(token: string): string {
+  return createHash("sha256").update(token, "utf8").digest("hex");
+}
+
+export function isWellFormedEntryToken(token: string): boolean {
+  return /^[A-Za-z0-9_-]{43}$/.test(token);
+}
+
+/** ID del partecipante dalla sessione firmata (cookie httpOnly), o null. */
+export async function getParticipantId(): Promise<string | null> {
+  const session = await getSession("participant");
+  if (!session) return null;
+  return uuidSchema.safeParse(session.subject).success ? session.subject : null;
 }

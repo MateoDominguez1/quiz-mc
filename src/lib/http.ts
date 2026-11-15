@@ -1,7 +1,7 @@
 import "server-only";
 import { NextResponse, type NextRequest } from "next/server";
 import { ConfigError } from "@/lib/env";
-import { getAdminSession } from "@/lib/auth/session";
+import { getSession } from "@/lib/auth/session";
 import { DatabaseError } from "@/lib/supabase/server";
 
 const NO_STORE = { "Cache-Control": "no-store, max-age=0" };
@@ -51,16 +51,39 @@ export async function readJson(req: NextRequest): Promise<unknown> {
   }
 }
 
-/** Guard per le API amministrative: sessione valida + stessa origine. */
-export async function guardAdmin(req: NextRequest, mutating = true) {
+/**
+ * Guard per le API del personale: sessione valida del ruolo richiesto
+ * (+ stessa origine per le richieste che modificano dati).
+ */
+export async function guardStaff(req: NextRequest, role: "admin" | "cassa", mutating = true) {
   if (mutating && !isSameOrigin(req)) {
-    return errorJson(403, "Richiesta non consentita");
+    return { denied: errorJson(403, "Richiesta non consentita"), session: null };
   }
-  const session = await getAdminSession();
+  const session = await getSession(role);
   if (!session) {
-    return errorJson(401, "Sessione scaduta. Accedi di nuovo.");
+    return { denied: errorJson(401, "Sessione scaduta. Accedi di nuovo."), session: null };
   }
-  return null;
+  return { denied: null, session };
+}
+
+/** Compatibilità con le API amministrative esistenti. */
+export async function guardAdmin(req: NextRequest, mutating = true) {
+  return (await guardStaff(req, "admin", mutating)).denied;
+}
+
+/** Origine pubblica dell'app (per i link nei QR code). */
+export function getPublicOrigin(req: NextRequest): string {
+  const configured = process.env.PUBLIC_SITE_URL?.trim();
+  if (configured) {
+    try {
+      return new URL(configured).origin;
+    } catch {
+      /* valore non valido: si usa l'host della richiesta */
+    }
+  }
+  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? req.nextUrl.host;
+  const proto = req.headers.get("x-forwarded-proto") ?? req.nextUrl.protocol.replace(":", "");
+  return `${proto}://${host}`;
 }
 
 /** Gestione uniforme degli errori imprevisti (nessun dettaglio interno al client). */

@@ -10,12 +10,12 @@ const nunito = Nunito({
 });
 
 export const metadata: Metadata = {
-  title: "Il Quiz del Giorno",
-  description: "Rispondi alla domanda del giorno e vinci un premio!",
-  applicationName: "Il Quiz del Giorno",
+  title: "Il Quiz",
+  description: "Rispondi alla domanda e vinci un premio!",
+  applicationName: "Il Quiz",
   appleWebApp: {
     capable: true,
-    title: "Quiz del Giorno",
+    title: "Il Quiz",
     statusBarStyle: "black-translucent",
   },
   formatDetection: { telephone: false, email: false, address: false },

@@ -7,7 +7,7 @@ export default function QuestionNotFound() {
       <p className="mt-2 text-ink-soft">La domanda potrebbe essere stata eliminata.</p>
       <Link
         href="/admin/domande"
-        className="mx-auto mt-5 inline-flex h-12 items-center rounded-2xl bg-mc-red px-6 font-black text-white"
+        className="mx-auto mt-5 inline-flex h-12 items-center rounded-2xl bg-brand-red px-6 font-black text-white"
       >
         Torna alle domande
       </Link>

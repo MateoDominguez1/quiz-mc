@@ -1,17 +1,17 @@
 import "server-only";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { ADMIN_COOKIE, verifyAdminSession, type AdminSession } from "@/lib/auth/token";
+import { SESSION_COOKIE, verifySession, type Session, type SessionRole } from "@/lib/auth/token";
 
-/** Sessione amministratore corrente (Server Components / Route Handlers). */
-export async function getAdminSession(): Promise<AdminSession | null> {
+/** Sessione corrente per un ruolo (Server Components / Route Handlers). */
+export async function getSession(role: SessionRole): Promise<Session | null> {
   const store = await cookies();
-  return verifyAdminSession(store.get(ADMIN_COOKIE)?.value);
+  return verifySession(role, store.get(SESSION_COOKIE[role])?.value);
 }
 
-/** Per le pagine protette: reindirizza al login se non autenticato. */
-export async function requireAdminPage(): Promise<AdminSession> {
-  const session = await getAdminSession();
-  if (!session) redirect("/admin");
+/** Per le pagine protette del personale: reindirizza al login se non autenticato. */
+export async function requireStaffPage(role: "admin" | "cassa"): Promise<Session> {
+  const session = await getSession(role);
+  if (!session) redirect(role === "admin" ? "/admin" : "/cassa");
   return session;
 }

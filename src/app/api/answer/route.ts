@@ -1,60 +1,36 @@
-import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 import { errorJson, getClientIp, handleUnexpected, isSameOrigin, json, readJson } from "@/lib/http";
-import { PARTICIPANT_COOKIE, parseParticipantId, participantCookieOptions } from "@/lib/participant";
-import { submitAnswer } from "@/lib/services/quiz";
+import { getParticipantId } from "@/lib/participant";
+import { getParticipantState, submitAnswer } from "@/lib/services/quiz";
 import { checkRateLimit } from "@/lib/services/rate-limit";
 import { answerSubmissionSchema } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
 
 /**
- * POST /api/answer  { questionId, answer: "A" | "B" | "C" | "D" }
- * Risposta: { ok: true, correct: boolean } – mai la risposta corretta.
+ * POST /api/answer  { answer: "A" | "B" | "C" | "D" }
+ * La domanda è quella assegnata al partecipante (dalla sessione), mai scelta dal client.
+ * Risposta: lo stato aggiornato (vinto + premio + codice, oppure perso).
  */
 export async function POST(req: NextRequest) {
-  if (!isSameOrigin(req)) {
-    return errorJson(403, "Richiesta non consentita");
-  }
+  if (!isSameOrigin(req)) return errorJson(403, "Richiesta non consentita");
 
   const parsed = answerSubmissionSchema.safeParse(await readJson(req));
-  if (!parsed.success) {
-    return errorJson(400, "Risposta non valida");
-  }
+  if (!parsed.success) return errorJson(400, "Risposta non valida");
 
   try {
-    // Limite per IP generoso (il Wi-Fi del ristorante può condividere l'IP).
-    const limit = await checkRateLimit("answer", getClientIp(req), 30, 300);
-    if (!limit.allowed) {
-      return errorJson(429, "Troppi tentativi. Riprova tra qualche minuto.", {
-        retryAfter: limit.retryAfter,
-      });
+    const participantId = await getParticipantId();
+    if (!participantId) {
+      return errorJson(401, "Sessione non trovata. Scansiona il QR code alla cassa.", { code: "no_session" });
     }
+    const limit = await checkRateLimit("answer", getClientIp(req), 60, 300);
+    if (!limit.allowed) return errorJson(429, "Troppi tentativi. Riprova tra qualche minuto.");
 
-    const existing = parseParticipantId(req.cookies.get(PARTICIPANT_COOKIE)?.value);
-    const participantId = existing ?? randomUUID();
-
-    const result = await submitAnswer(parsed.data.questionId, parsed.data.answer, participantId);
-
-    let res;
-    switch (result.status) {
-      case "ok":
-        res = json({ ok: true, correct: result.correct, alreadyAnswered: false });
-        break;
-      case "already_answered":
-        res = json({ ok: true, correct: result.correct, alreadyAnswered: true });
-        break;
-      case "stale":
-        res = errorJson(409, "La domanda del giorno è cambiata.", { code: "stale" });
-        break;
-      default:
-        res = errorJson(404, "Al momento non ci sono domande disponibili.", { code: "no_question" });
+    const status = await submitAnswer(participantId, parsed.data.answer);
+    if (status === "not_found") {
+      return errorJson(401, "Sessione non trovata. Scansiona il QR code alla cassa.", { code: "no_session" });
     }
-
-    if (!existing) {
-      res.cookies.set(PARTICIPANT_COOKIE, participantId, participantCookieOptions());
-    }
-    return res;
+    return json({ ok: true, alreadyAnswered: status === "already_answered", state: await getParticipantState(participantId) });
   } catch (err) {
     return handleUnexpected(err, "POST /api/answer");
   }

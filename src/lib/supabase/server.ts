@@ -13,7 +13,7 @@ export function getSupabaseAdmin(): SupabaseClient {
     const { url, serviceRoleKey } = getSupabaseEnv();
     client = createClient(url, serviceRoleKey, {
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-      global: { headers: { "x-application-name": "quiz-del-giorno" } },
+      global: { headers: { "x-application-name": "il-quiz" } },
     });
   }
   return client;

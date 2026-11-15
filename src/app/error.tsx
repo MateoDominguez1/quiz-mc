@@ -10,7 +10,7 @@ export default function GlobalError({ reset }: { error: Error & { digest?: strin
       <button
         type="button"
         onClick={reset}
-        className="flex h-14 items-center gap-2 rounded-2xl bg-mc-red px-8 text-lg font-black text-white"
+        className="flex h-14 items-center gap-2 rounded-2xl bg-brand-red px-8 text-lg font-black text-white"
       >
         <RefreshCw className="size-5" aria-hidden /> Riprova
       </button>

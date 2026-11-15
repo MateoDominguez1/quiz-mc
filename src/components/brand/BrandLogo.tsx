@@ -1,42 +1,43 @@
 /* eslint-disable @next/next/no-img-element */
 
 /**
- * Spazio riservato al logo ufficiale.
- * Per usare il logo fornito: copiarlo in /public (es. /public/logo.svg)
- * e impostare NEXT_PUBLIC_LOGO_URL=/logo.svg. Senza logo viene mostrato
- * il nome del ristorante in forma testuale (nessun logo non autorizzato).
+ * Logo dell'app "Il Quiz": identità propria (punto interrogativo giallo su
+ * rosso), nessun riferimento a marchi di terzi. Per usare un logo diverso:
+ * copiarlo in /public e impostare NEXT_PUBLIC_LOGO_URL (es. /logo.svg).
  */
 const LOGO_URL = process.env.NEXT_PUBLIC_LOGO_URL?.trim() || "";
-const BRAND_NAME = process.env.NEXT_PUBLIC_BRAND_NAME?.trim() || "McDonald's";
+
+export const APP_NAME = "Il Quiz";
 
 interface BrandLogoProps {
   size?: "sm" | "md" | "lg";
+  /** "light" su sfondo rosso/nero, "dark" su sfondo bianco. */
+  tone?: "light" | "dark";
   className?: string;
 }
 
-const heights = { sm: "h-8", md: "h-12", lg: "h-16" };
-const textSizes = { sm: "text-base px-3 py-1", md: "text-xl px-4 py-1.5", lg: "text-2xl px-5 py-2" };
+const sizes = {
+  sm: { box: "size-8 text-lg", text: "text-lg", img: "h-8" },
+  md: { box: "size-11 text-2xl", text: "text-2xl", img: "h-12" },
+  lg: { box: "size-14 text-3xl", text: "text-3xl", img: "h-16" },
+};
 
-export function BrandLogo({ size = "md", className = "" }: BrandLogoProps) {
+export function BrandLogo({ size = "md", tone = "light", className = "" }: BrandLogoProps) {
+  const s = sizes[size];
   if (LOGO_URL) {
-    return (
-      <img
-        src={LOGO_URL}
-        alt={BRAND_NAME}
-        className={`${heights[size]} w-auto object-contain ${className}`}
-        decoding="async"
-      />
-    );
+    return <img src={LOGO_URL} alt={APP_NAME} className={`${s.img} w-auto object-contain ${className}`} decoding="async" />;
   }
   return (
-    <span
-      role="img"
-      aria-label={BRAND_NAME}
-      className={`inline-flex items-center rounded-full bg-mc-yellow font-black tracking-tight text-mc-red shadow-[0_3px_0_0_var(--color-mc-yellow-dark)] ${textSizes[size]} ${className}`}
-    >
-      {BRAND_NAME}
+    <span role="img" aria-label={APP_NAME} className={`inline-flex items-center gap-2 ${className}`}>
+      <span
+        aria-hidden
+        className={`grid ${s.box} place-items-center rounded-full bg-brand-yellow font-black leading-none text-brand-red shadow-[0_3px_0_0_var(--color-brand-yellow-dark)]`}
+      >
+        ?
+      </span>
+      <span aria-hidden className={`${s.text} font-black tracking-tight ${tone === "light" ? "text-white" : "text-ink"}`}>
+        Il <span className={tone === "light" ? "text-brand-yellow" : "text-brand-red"}>Quiz</span>
+      </span>
     </span>
   );
 }
-
-export const brandName = BRAND_NAME;

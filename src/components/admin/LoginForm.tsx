@@ -6,7 +6,7 @@ import { useRef, useState, type FormEvent } from "react";
 import { Spinner } from "@/components/ui/Spinner";
 import { apiFetch } from "@/lib/client/api";
 
-export function LoginForm() {
+export function LoginForm({ area = "admin" }: { area?: "admin" | "cassa" }) {
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -25,12 +25,12 @@ export function LoginForm() {
     inFlight.current = true;
     setLoading(true);
     setError(null);
-    const res = await apiFetch("/api/admin/login", {
+    const res = await apiFetch(`/api/${area}/login`, {
       method: "POST",
       body: { username: username.trim(), password },
     });
     if (res.ok) {
-      router.replace("/admin/dashboard");
+      router.replace(`/${area}/dashboard`);
       router.refresh();
       return; // resta in caricamento fino al cambio pagina
     }
@@ -57,7 +57,7 @@ export function LoginForm() {
             spellCheck={false}
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            className="h-14 w-full rounded-2xl border-2 border-neutral-200 bg-white pl-12 pr-4 font-bold text-ink outline-none transition focus:border-mc-yellow-dark focus:ring-4 focus:ring-mc-yellow/30"
+            className="h-14 w-full rounded-2xl border-2 border-neutral-200 bg-white pl-12 pr-4 font-bold text-ink outline-none transition focus:border-brand-yellow-dark focus:ring-4 focus:ring-brand-yellow/30"
             required
           />
         </div>
@@ -76,7 +76,7 @@ export function LoginForm() {
             autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="h-14 w-full rounded-2xl border-2 border-neutral-200 bg-white pl-12 pr-14 font-bold text-ink outline-none transition focus:border-mc-yellow-dark focus:ring-4 focus:ring-mc-yellow/30"
+            className="h-14 w-full rounded-2xl border-2 border-neutral-200 bg-white pl-12 pr-14 font-bold text-ink outline-none transition focus:border-brand-yellow-dark focus:ring-4 focus:ring-brand-yellow/30"
             required
           />
           <button
@@ -91,7 +91,7 @@ export function LoginForm() {
       </div>
 
       {error && (
-        <p role="alert" className="rounded-2xl bg-red-50 px-4 py-3 text-[15px] font-bold text-mc-red-dark">
+        <p role="alert" className="rounded-2xl bg-red-50 px-4 py-3 text-[15px] font-bold text-brand-red-dark">
           {error}
         </p>
       )}
@@ -99,7 +99,7 @@ export function LoginForm() {
       <button
         type="submit"
         disabled={loading}
-        className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-mc-red text-lg font-black text-white shadow-[0_4px_0_0_var(--color-mc-red-darker)] transition active:translate-y-0.5 active:shadow-none disabled:opacity-70"
+        className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-brand-red text-lg font-black text-white shadow-[0_4px_0_0_var(--color-brand-red-darker)] transition active:translate-y-0.5 active:shadow-none disabled:opacity-70"
       >
         {loading ? (
           <>

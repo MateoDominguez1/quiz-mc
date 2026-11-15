@@ -43,7 +43,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             key={t.id}
             role={t.kind === "error" ? "alert" : "status"}
             className={`pointer-events-auto flex w-full max-w-md animate-toast-in items-start gap-3 rounded-2xl px-4 py-3 text-white shadow-lg ${
-              t.kind === "success" ? "bg-emerald-600" : "bg-mc-red"
+              t.kind === "success" ? "bg-emerald-600" : "bg-brand-red"
             }`}
           >
             {t.kind === "success" ? (

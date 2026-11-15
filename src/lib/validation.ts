@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ANSWER_LETTERS } from "@/types/quiz";
+import { ANSWER_LETTERS, PRIZE_TYPES } from "@/types/quiz";
 
 const requiredText = (label: string, max: number) =>
   z
@@ -39,10 +39,37 @@ export const statusInputSchema = z.object({
   isActive: z.boolean({ error: "Stato non valido" }),
 });
 
+/** La domanda è nota al server (sessione del partecipante): si invia solo la lettera. */
 export const answerSubmissionSchema = z.object({
-  questionId: z.uuid({ error: "Domanda non valida" }),
   answer: answerLetterSchema,
 });
+
+export const MIN_AGE = 0;
+export const MAX_AGE = 120;
+const AGE_ERROR = `Inserisci un'età valida (numero intero da ${MIN_AGE} a ${MAX_AGE})`;
+
+/** Età: solo numeri interi, niente negativi, decimali o testo. Accetta "12" o 12. */
+export const ageSchema = z
+  .union([z.number(), z.string().trim().regex(/^\d{1,3}$/, { error: AGE_ERROR }).transform(Number)], {
+    error: AGE_ERROR,
+  })
+  .pipe(z.number().int({ error: AGE_ERROR }).min(MIN_AGE, { error: AGE_ERROR }).max(MAX_AGE, { error: AGE_ERROR }));
+
+export const entrySchema = z.object({
+  token: z.string().regex(/^[A-Za-z0-9_-]{43}$/, { error: "Codice non valido" }),
+  age: ageSchema,
+});
+
+/** Codice premio come digitato in cassa (la normalizzazione avviene nel DB). */
+export const prizeCodeSchema = z.object({
+  code: z
+    .string({ error: "Inserisci il codice del premio" })
+    .trim()
+    .min(1, { error: "Inserisci il codice del premio" })
+    .max(20, { error: "Codice non valido. Verifica il codice inserito." }),
+});
+
+export const prizeTypeSchema = z.enum(PRIZE_TYPES);
 
 export const loginSchema = z.object({
   username: z.string().trim().min(1, { error: "Inserisci il nome utente" }).max(100),

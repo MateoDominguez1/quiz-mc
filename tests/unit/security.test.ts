@@ -2,7 +2,7 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { toPublicQuestion } from "@/lib/services/quiz";
-import { answerSubmissionSchema, questionInputSchema } from "@/lib/validation";
+import { ageSchema, answerSubmissionSchema, entrySchema, prizeTypeSchema, questionInputSchema } from "@/lib/validation";
 
 describe("protezione della risposta corretta", () => {
   it("toPublicQuestion scarta qualsiasi campo non previsto (es. correct_answer)", () => {
@@ -65,9 +65,31 @@ describe("validazione", () => {
   });
 
   it("rifiuta invii di risposta malformati", () => {
-    expect(answerSubmissionSchema.safeParse({ questionId: "x", answer: "A" }).success).toBe(false);
-    expect(
-      answerSubmissionSchema.safeParse({ questionId: "7bfe2b8b-0adb-44c2-a874-735e08b51835", answer: "AB" }).success,
-    ).toBe(false);
+    expect(answerSubmissionSchema.safeParse({ answer: "A" }).success).toBe(true);
+    expect(answerSubmissionSchema.safeParse({ answer: "AB" }).success).toBe(false);
+    expect(answerSubmissionSchema.safeParse({ answer: "e" }).success).toBe(false);
+    expect(answerSubmissionSchema.safeParse({}).success).toBe(false);
+  });
+
+  it("età: solo interi da 0 a 120", () => {
+    for (const ok of [0, 10, 11, 17, 18, 120, "0", "25", " 42 "]) {
+      expect(ageSchema.safeParse(ok).success, String(ok)).toBe(true);
+    }
+    for (const bad of [-1, 121, 12.5, "12.5", "-3", "abc", "", "1e2", null, undefined, true, "0x10"]) {
+      expect(ageSchema.safeParse(bad).success, String(bad)).toBe(false);
+    }
+    expect(ageSchema.parse("07")).toBe(7);
+  });
+
+  it("token QR: formato base64url di 43 caratteri", () => {
+    const token = "A".repeat(43);
+    expect(entrySchema.safeParse({ token, age: 20 }).success).toBe(true);
+    expect(entrySchema.safeParse({ token: token.slice(1), age: 20 }).success).toBe(false);
+    expect(entrySchema.safeParse({ token: `${token.slice(1)}/`, age: 20 }).success).toBe(false);
+  });
+
+  it("tipi di premio ammessi", () => {
+    expect(prizeTypeSchema.safeParse("cono").success).toBe(true);
+    expect(prizeTypeSchema.safeParse("pizza").success).toBe(false);
   });
 });

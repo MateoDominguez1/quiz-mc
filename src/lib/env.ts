@@ -46,19 +46,33 @@ export function getSupabaseEnv() {
   };
 }
 
-export function getAdminEnv() {
+/** Segreto unico per firmare tutte le sessioni (admin, cassa, partecipante). */
+export function getSessionSecret(): string {
   const secret = required("ADMIN_SESSION_SECRET", process.env.ADMIN_SESSION_SECRET);
   if (secret.length < 32) {
     throw new ConfigError("ADMIN_SESSION_SECRET deve contenere almeno 32 caratteri");
   }
+  return secret;
+}
+
+export type StaffRole = "admin" | "cassa";
+
+/** Credenziali del personale: ADMIN_USERNAME/ADMIN_PASSWORD e CASSA_USERNAME/CASSA_PASSWORD. */
+export function getStaffCredentials(role: StaffRole) {
+  const prefix = role === "admin" ? "ADMIN" : "CASSA";
   return {
-    username: required("ADMIN_USERNAME", process.env.ADMIN_USERNAME),
-    password: required("ADMIN_PASSWORD", process.env.ADMIN_PASSWORD),
-    sessionSecret: secret,
+    username: required(`${prefix}_USERNAME`, process.env[`${prefix}_USERNAME`]),
+    password: required(`${prefix}_PASSWORD`, process.env[`${prefix}_PASSWORD`]),
   };
+}
+
+/** Durata di validità di un QR non ancora utilizzato (minuti). */
+export function getEntryTtlMinutes(): number {
+  const n = Number(process.env.QR_VALIDITY_MINUTES);
+  return Number.isInteger(n) && n >= 1 && n <= 24 * 60 ? n : 60;
 }
 
 /** Sale per l'hash degli IP nelle chiavi di rate limiting (mai IP in chiaro nel DB). */
 export function getHashSalt(): string {
-  return process.env.ADMIN_SESSION_SECRET ?? "quiz-del-giorno";
+  return process.env.ADMIN_SESSION_SECRET ?? "il-quiz";
 }

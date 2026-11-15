@@ -138,7 +138,7 @@ export function QuestionsManager({ questions, today }: { questions: AdminQuestio
         </div>
         <Link
           href="/admin/domande/nuova"
-          className="hidden h-12 items-center justify-center gap-2 rounded-2xl bg-mc-red px-5 font-black text-white shadow-[0_4px_0_0_var(--color-mc-red-darker)] active:translate-y-0.5 active:shadow-none sm:flex"
+          className="hidden h-12 items-center justify-center gap-2 rounded-2xl bg-brand-red px-5 font-black text-white shadow-[0_4px_0_0_var(--color-brand-red-darker)] active:translate-y-0.5 active:shadow-none sm:flex"
         >
           <PlusCircle className="size-5" aria-hidden /> Nuova domanda
         </Link>
@@ -153,7 +153,7 @@ export function QuestionsManager({ questions, today }: { questions: AdminQuestio
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Cerca nelle domande…"
             aria-label="Cerca nelle domande"
-            className="h-12 w-full rounded-2xl border-2 border-neutral-200 bg-white pl-12 pr-4 font-semibold outline-none focus:border-mc-yellow-dark focus:ring-4 focus:ring-mc-yellow/30"
+            className="h-12 w-full rounded-2xl border-2 border-neutral-200 bg-white pl-12 pr-4 font-semibold outline-none focus:border-brand-yellow-dark focus:ring-4 focus:ring-brand-yellow/30"
           />
         </div>
         <div className="grid grid-cols-3 gap-1 rounded-2xl bg-white p-1 shadow-sm" role="tablist" aria-label="Filtra per stato">
@@ -180,7 +180,7 @@ export function QuestionsManager({ questions, today }: { questions: AdminQuestio
           <p className="mt-1 text-ink-soft">Crea la prima domanda per avviare il quiz.</p>
           <Link
             href="/admin/domande/nuova"
-            className="mx-auto mt-5 inline-flex h-12 items-center gap-2 rounded-2xl bg-mc-red px-5 font-black text-white"
+            className="mx-auto mt-5 inline-flex h-12 items-center gap-2 rounded-2xl bg-brand-red px-5 font-black text-white"
           >
             <PlusCircle className="size-5" aria-hidden /> Crea una domanda
           </Link>
@@ -197,7 +197,7 @@ export function QuestionsManager({ questions, today }: { questions: AdminQuestio
               <li key={q.id} className="rounded-3xl bg-white p-4 shadow-sm">
                 <div className="mb-2 flex flex-wrap items-center gap-2">
                   {q.lastUsedDate === today && (
-                    <span className="rounded-full bg-mc-yellow px-2.5 py-0.5 text-xs font-black text-ink">Oggi</span>
+                    <span className="rounded-full bg-brand-yellow px-2.5 py-0.5 text-xs font-black text-ink">Usata oggi</span>
                   )}
                   <span className="text-xs font-bold text-neutral-500">Creata il {formatItalianDateTime(q.createdAt)}</span>
                 </div>
@@ -234,7 +234,7 @@ export function QuestionsManager({ questions, today }: { questions: AdminQuestio
                     <button
                       type="button"
                       onClick={() => setToDelete(q)}
-                      className="grid size-11 place-items-center rounded-xl bg-red-50 text-mc-red hover:bg-red-100"
+                      className="grid size-11 place-items-center rounded-xl bg-red-50 text-brand-red hover:bg-red-100"
                       aria-label="Elimina domanda"
                     >
                       <Trash2 className="size-5" aria-hidden />
@@ -263,7 +263,7 @@ export function QuestionsManager({ questions, today }: { questions: AdminQuestio
                     <td className="max-w-md px-5 py-4">
                       <div className="flex items-start gap-2">
                         {q.lastUsedDate === today && (
-                          <span className="mt-0.5 rounded-full bg-mc-yellow px-2 py-0.5 text-xs font-black">Oggi</span>
+                          <span className="mt-0.5 rounded-full bg-brand-yellow px-2 py-0.5 text-xs font-black">Usata oggi</span>
                         )}
                         <p className="font-extrabold leading-snug">{q.questionText}</p>
                       </div>
@@ -293,7 +293,7 @@ export function QuestionsManager({ questions, today }: { questions: AdminQuestio
                         <button
                           type="button"
                           onClick={() => setToDelete(q)}
-                          className="flex h-10 items-center gap-1.5 rounded-xl bg-red-50 px-3 text-sm font-bold text-mc-red hover:bg-red-100"
+                          className="flex h-10 items-center gap-1.5 rounded-xl bg-red-50 px-3 text-sm font-bold text-brand-red hover:bg-red-100"
                         >
                           <Trash2 className="size-4" aria-hidden /> Elimina
                         </button>
@@ -312,8 +312,8 @@ export function QuestionsManager({ questions, today }: { questions: AdminQuestio
         title="Eliminare la domanda?"
         description={
           toDelete?.lastUsedDate === today
-            ? "Questa è la domanda di oggi: se la elimini ne verrà scelta automaticamente un'altra. L'operazione non può essere annullata."
-            : "La domanda e le statistiche collegate verranno eliminate definitivamente. L'operazione non può essere annullata."
+            ? "Questa domanda è stata assegnata oggi: chi non ha ancora risposto non potrà più farlo. Se vuoi solo smettere di proporla, disattivala. L'operazione non può essere annullata."
+            : "La domanda verrà eliminata definitivamente (partecipanti e premi già registrati restano nelle statistiche). L'operazione non può essere annullata."
         }
         confirmLabel="Elimina"
         loading={deleting}

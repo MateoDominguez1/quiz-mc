@@ -35,7 +35,7 @@ export function ConfirmDialog({ open, title, description, confirmLabel, loading,
       aria-labelledby="confirm-title"
     >
       <div className="p-6">
-        <div className="mb-4 grid size-12 place-items-center rounded-full bg-red-50 text-mc-red">
+        <div className="mb-4 grid size-12 place-items-center rounded-full bg-red-50 text-brand-red">
           <TriangleAlert className="size-6" aria-hidden />
         </div>
         <h2 id="confirm-title" className="text-xl font-black text-ink">
@@ -55,7 +55,7 @@ export function ConfirmDialog({ open, title, description, confirmLabel, loading,
             type="button"
             onClick={onConfirm}
             disabled={loading}
-            className="flex h-12 items-center justify-center gap-2 rounded-2xl bg-mc-red px-5 font-black text-white disabled:opacity-70"
+            className="flex h-12 items-center justify-center gap-2 rounded-2xl bg-brand-red px-5 font-black text-white disabled:opacity-70"
           >
             {loading && <Spinner />}
             {confirmLabel}

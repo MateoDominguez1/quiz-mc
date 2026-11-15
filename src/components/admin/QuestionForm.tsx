@@ -85,15 +85,15 @@ export function QuestionForm({ initial }: { initial?: AdminQuestion }) {
   const inputClass = (field: string) =>
     `w-full rounded-2xl border-2 bg-white px-4 font-semibold text-ink outline-none transition focus:ring-4 ${
       errors[field]
-        ? "border-mc-red focus:ring-mc-red/20"
-        : "border-neutral-200 focus:border-mc-yellow-dark focus:ring-mc-yellow/30"
+        ? "border-brand-red focus:ring-brand-red/20"
+        : "border-neutral-200 focus:border-brand-yellow-dark focus:ring-brand-yellow/30"
     }`;
 
   return (
     <form onSubmit={onSubmit} noValidate className="space-y-6">
       <div className="space-y-2 rounded-3xl bg-white p-5 shadow-sm sm:p-6">
         <label htmlFor="questionText" className="block font-black">
-          Domanda <span className="text-mc-red">*</span>
+          Domanda <span className="text-brand-red">*</span>
         </label>
         <textarea
           id="questionText"
@@ -108,7 +108,7 @@ export function QuestionForm({ initial }: { initial?: AdminQuestion }) {
         />
         <div className="flex justify-between gap-3 text-sm">
           {errors.questionText ? (
-            <p id="questionText-error" className="font-bold text-mc-red">
+            <p id="questionText-error" className="font-bold text-brand-red">
               {errors.questionText}
             </p>
           ) : (
@@ -121,7 +121,7 @@ export function QuestionForm({ initial }: { initial?: AdminQuestion }) {
       <fieldset className="space-y-4 rounded-3xl bg-white p-5 shadow-sm sm:p-6">
         <legend className="sr-only">Risposte</legend>
         <p className="font-black">
-          Risposte <span className="text-mc-red">*</span>
+          Risposte <span className="text-brand-red">*</span>
         </p>
         {ANSWER_LETTERS.map((l) => {
           const key = answerKey(l);
@@ -133,7 +133,7 @@ export function QuestionForm({ initial }: { initial?: AdminQuestion }) {
               <div className="flex items-center gap-3">
                 <span
                   className={`grid size-12 shrink-0 place-items-center rounded-xl text-lg font-black ${
-                    form.correctAnswer === l ? "bg-emerald-500 text-white" : "bg-mc-yellow text-ink"
+                    form.correctAnswer === l ? "bg-emerald-500 text-white" : "bg-brand-yellow text-ink"
                   }`}
                   aria-hidden
                 >
@@ -148,7 +148,7 @@ export function QuestionForm({ initial }: { initial?: AdminQuestion }) {
                   aria-invalid={Boolean(errors[key])}
                 />
               </div>
-              {errors[key] && <p className="pl-[60px] text-sm font-bold text-mc-red">{errors[key]}</p>}
+              {errors[key] && <p className="pl-[60px] text-sm font-bold text-brand-red">{errors[key]}</p>}
             </div>
           );
         })}
@@ -157,7 +157,7 @@ export function QuestionForm({ initial }: { initial?: AdminQuestion }) {
       <fieldset className="space-y-3 rounded-3xl bg-white p-5 shadow-sm sm:p-6">
         <legend className="sr-only">Risposta corretta</legend>
         <p className="font-black">
-          Risposta corretta <span className="text-mc-red">*</span>
+          Risposta corretta <span className="text-brand-red">*</span>
         </p>
         <div role="radiogroup" aria-label="Risposta corretta" className="grid grid-cols-4 gap-2 sm:gap-3">
           {ANSWER_LETTERS.map((l) => {
@@ -186,7 +186,7 @@ export function QuestionForm({ initial }: { initial?: AdminQuestion }) {
             );
           })}
         </div>
-        {errors.correctAnswer && <p className="text-sm font-bold text-mc-red">{errors.correctAnswer}</p>}
+        {errors.correctAnswer && <p className="text-sm font-bold text-brand-red">{errors.correctAnswer}</p>}
       </fieldset>
 
       <div className="rounded-3xl bg-white p-5 shadow-sm sm:p-6">
@@ -194,7 +194,7 @@ export function QuestionForm({ initial }: { initial?: AdminQuestion }) {
           <span>
             <span className="block font-black">Domanda attiva</span>
             <span className="block text-sm text-ink-soft">
-              Solo le domande attive possono essere scelte come domanda del giorno.
+              Solo le domande attive vengono proposte ai partecipanti.
             </span>
           </span>
           <span className="relative inline-flex shrink-0">
@@ -204,7 +204,7 @@ export function QuestionForm({ initial }: { initial?: AdminQuestion }) {
               onChange={(e) => update("isActive", e.target.checked)}
               className="peer sr-only"
             />
-            <span className="h-8 w-14 rounded-full bg-neutral-300 transition peer-checked:bg-emerald-500 peer-focus-visible:ring-4 peer-focus-visible:ring-mc-yellow/50" />
+            <span className="h-8 w-14 rounded-full bg-neutral-300 transition peer-checked:bg-emerald-500 peer-focus-visible:ring-4 peer-focus-visible:ring-brand-yellow/50" />
             <span className="absolute left-1 top-1 size-6 rounded-full bg-white shadow transition peer-checked:translate-x-6" />
           </span>
         </label>
@@ -220,7 +220,7 @@ export function QuestionForm({ initial }: { initial?: AdminQuestion }) {
         <button
           type="submit"
           disabled={saving}
-          className="flex h-14 items-center justify-center gap-2 rounded-2xl bg-mc-red px-8 text-lg font-black text-white shadow-[0_4px_0_0_var(--color-mc-red-darker)] transition active:translate-y-0.5 active:shadow-none disabled:opacity-70"
+          className="flex h-14 items-center justify-center gap-2 rounded-2xl bg-brand-red px-8 text-lg font-black text-white shadow-[0_4px_0_0_var(--color-brand-red-darker)] transition active:translate-y-0.5 active:shadow-none disabled:opacity-70"
         >
           {saving ? <Spinner /> : <Save className="size-5" aria-hidden />}
           {saving ? "Salvataggio…" : "Salva domanda"}

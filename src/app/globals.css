@@ -1,15 +1,15 @@
 @import "tailwindcss";
 
 @theme {
-  --color-mc-red: #da291c;
-  --color-mc-red-dark: #b71f14;
-  --color-mc-red-darker: #8f160e;
-  --color-mc-yellow: #ffc72c;
-  --color-mc-yellow-dark: #f2b200;
-  --color-mc-yellow-light: #fff4d1;
-  --color-ink: #1b1b1b;
-  --color-ink-soft: #4a4a4a;
-  --color-cream: #fffaf0;
+  --color-brand-red: #da291c;
+  --color-brand-red-dark: #b71f14;
+  --color-brand-red-darker: #8f160e;
+  --color-brand-yellow: #ffc72c;
+  --color-brand-yellow-dark: #f2b200;
+  --color-brand-yellow-light: #fff4d1;
+  --color-ink: #000000;
+  --color-ink-soft: #3d3d3d;
+  --color-cream: #ffffff;
 
   --font-sans: var(--font-nunito), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 
@@ -69,11 +69,14 @@ body {
   overflow-x: hidden;
 }
 
-/* Evita lo zoom automatico di iOS sui campi (font-size >= 16px). */
-input,
-select,
-textarea {
-  font-size: 16px;
+/* Evita lo zoom automatico di iOS sui campi (font-size >= 16px).
+   Nel layer "base" così le classi Tailwind (text-*) possono ingrandirli. */
+@layer base {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
 }
 
 button {
@@ -81,7 +84,7 @@ button {
 }
 
 :focus-visible {
-  outline: 3px solid var(--color-mc-yellow-dark);
+  outline: 3px solid var(--color-brand-yellow-dark);
   outline-offset: 2px;
 }
 

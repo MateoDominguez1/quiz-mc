@@ -9,7 +9,7 @@ export default function NotFound() {
       <p className="text-lg font-bold text-ink-soft">La pagina che cerchi non esiste.</p>
       <Link
         href="/"
-        className="flex h-14 items-center rounded-2xl bg-mc-red px-8 text-lg font-black text-white shadow-[0_4px_0_0_var(--color-mc-red-darker)]"
+        className="flex h-14 items-center rounded-2xl bg-brand-red px-8 text-lg font-black text-white shadow-[0_4px_0_0_var(--color-brand-red-darker)]"
       >
         Vai al quiz
       </Link>

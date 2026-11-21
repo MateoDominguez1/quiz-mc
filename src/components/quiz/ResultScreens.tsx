@@ -1,12 +1,30 @@
 "use client";
 
-import { CircleX, Gift, Heart, RotateCcw } from "lucide-react";
-import { BrandLogo } from "@/components/brand/BrandLogo";
+import { CircleX, Gift, Heart, MapPin, RotateCcw } from "lucide-react";
 import { Confetti } from "@/components/quiz/Confetti";
 import { HouseArt } from "@/components/quiz/HouseArt";
 import { PrizeImage } from "@/components/quiz/PrizeImage";
 import { Spinner } from "@/components/ui/Spinner";
-import { HOUSE_INFO, type GameState } from "@/types/quiz";
+import { HOUSE_INFO, type GameState, type Restaurant } from "@/types/quiz";
+
+function Brand({ restaurant, tone }: { restaurant: Restaurant | null; tone: "light" | "dark" }) {
+  return (
+    <div className="flex flex-col items-center gap-1.5">
+      <p className={`text-2xl font-black tracking-tight ${tone === "light" ? "text-brand-yellow" : "text-brand-red"}`}>
+        🍔 McHappy Quiz!
+      </p>
+      {restaurant && (
+        <span
+          className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-extrabold ${
+            tone === "light" ? "bg-white/15 text-white" : "bg-white text-ink-soft shadow-sm"
+          }`}
+        >
+          <MapPin className="size-3.5" aria-hidden /> {restaurant.name}
+        </span>
+      )}
+    </div>
+  );
+}
 
 function NewCustomerButton({ onClick, busy, tone }: { onClick: () => void; busy: boolean; tone: "yellow" | "red" }) {
   return (
@@ -28,10 +46,12 @@ function NewCustomerButton({ onClick, busy, tone }: { onClick: () => void; busy:
 
 export function WinScreen({
   state,
+  restaurant,
   busy,
   onNewCustomer,
 }: {
   state: Extract<GameState, { kind: "won" }>;
+  restaurant: Restaurant | null;
   busy: boolean;
   onNewCustomer: () => void;
 }) {
@@ -44,11 +64,12 @@ export function WinScreen({
         : "Risposta esatta! 🎉";
 
   return (
-    <main className="relative flex min-h-dvh flex-col overflow-hidden bg-gradient-to-b from-brand-red via-brand-red to-brand-red-dark text-white">
+    <main className="quiz-header relative flex min-h-dvh flex-col overflow-hidden text-white">
+      <div aria-hidden className="sunburst pointer-events-none absolute left-1/2 top-40 size-[640px] -translate-x-1/2 opacity-60" />
       {prize && <Confetti />}
 
       <div className="relative z-10 mx-auto flex w-full max-w-md flex-1 flex-col items-center px-5 pb-[calc(var(--safe-bottom)+24px)] pt-[calc(var(--safe-top)+16px)] text-center">
-        <BrandLogo size="sm" />
+        <Brand restaurant={restaurant} tone="light" />
 
         <h1 className="mt-5 bg-[linear-gradient(110deg,#ffc72c_35%,#fff6d6_50%,#ffc72c_65%)] bg-[length:200%_auto] bg-clip-text text-[42px] font-black leading-none tracking-tight text-transparent animate-shine">
           COMPLIMENTI!
@@ -98,18 +119,20 @@ export function WinScreen({
 
 export function LoseScreen({
   state,
+  restaurant,
   busy,
   onNewCustomer,
 }: {
   state: Extract<GameState, { kind: "lost" }>;
+  restaurant: Restaurant | null;
   busy: boolean;
   onNewCustomer: () => void;
 }) {
   const multi = state.totalSteps > 1;
   return (
-    <main className="flex min-h-dvh flex-col bg-cream">
+    <main className="quiz-bg flex min-h-dvh flex-col">
       <div className="mx-auto flex w-full max-w-md flex-1 flex-col items-center px-5 pb-[calc(var(--safe-bottom)+24px)] pt-[calc(var(--safe-top)+20px)] text-center">
-        <BrandLogo size="sm" tone="dark" />
+        <Brand restaurant={restaurant} tone="dark" />
         <div className="flex flex-1 flex-col items-center justify-center py-8">
           <div className="mb-6 grid size-28 animate-pop-in place-items-center rounded-full bg-brand-red/10">
             <CircleX className="size-16 text-brand-red" strokeWidth={2.4} aria-hidden />
@@ -124,7 +147,7 @@ export function LoseScreen({
               {state.correctCount}/{state.totalSteps} risposte corrette
             </p>
           )}
-          <div className="mt-6 w-full animate-fade-up rounded-3xl bg-neutral-50 px-5 py-5" style={{ animationDelay: "0.2s" }}>
+          <div className="mt-6 w-full animate-fade-up rounded-3xl bg-white/90 px-5 py-5 shadow-[0_14px_30px_-18px_rgba(124,10,28,0.4)]" style={{ animationDelay: "0.2s" }}>
             <p className="flex items-center justify-center gap-2 text-xl font-black text-ink">
               <Heart className="size-6 shrink-0 animate-heartbeat fill-brand-red text-brand-red" aria-hidden />
               Grazie per aver giocato!

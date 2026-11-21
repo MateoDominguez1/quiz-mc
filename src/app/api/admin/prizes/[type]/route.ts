@@ -5,7 +5,7 @@ import { fieldErrors, prizeKeySchema, prizeUpdateSchema } from "@/lib/validation
 
 export const dynamic = "force-dynamic";
 
-/** PATCH /api/admin/prizes/:type  { label, winMessage, stock } – nome, messaggio e pezzi disponibili. */
+/** PATCH /api/admin/prizes/:type  { label, winMessage } – nome e messaggio (comuni a tutti i ristoranti). */
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ type: string }> }) {
   const denied = await guardAdmin(req);
   if (denied) return denied;
@@ -19,7 +19,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ type: str
     return errorJson(422, parsed.error.issues[0]?.message ?? "Dati non validi", { fields: fieldErrors(parsed.error) });
   }
   try {
-    const ok = await updatePrize(prize.data, parsed.data.label, parsed.data.winMessage, parsed.data.stock);
+    const ok = await updatePrize(prize.data, parsed.data.label, parsed.data.winMessage);
     if (!ok) return errorJson(404, "Premio non trovato");
     return json({ ok: true });
   } catch (err) {

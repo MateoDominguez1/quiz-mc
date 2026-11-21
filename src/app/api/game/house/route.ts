@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { getCurrentGameId } from "@/lib/game-session";
+import { getCurrentGameId, getCurrentRestaurant } from "@/lib/game-session";
 import { errorJson, guardStaff, handleUnexpected, json, readJson } from "@/lib/http";
 import { getGameState, pickHouse } from "@/lib/services/quiz";
 import { houseSchema } from "@/lib/validation";
@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
   try {
     const gameId = await getCurrentGameId();
     if (gameId) await pickHouse(gameId, parsed.data.house);
-    return json({ ok: true, state: await getGameState(gameId) });
+    return json({ ok: true, state: await getGameState(gameId, await getCurrentRestaurant()) });
   } catch (err) {
     return handleUnexpected(err, "POST /api/game/house");
   }

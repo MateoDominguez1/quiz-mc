@@ -6,7 +6,11 @@
 --  e aggiorna un database creato con le versioni precedenti senza perdere le
 --  domande già inserite (né le scorte dei premi, se già presenti).
 --
---  Flusso (un solo dispositivo, usato dal personale con i clienti):
+--  Più ristoranti (Merlata, Rho, Bonola, Magenta): ogni dispositivo sceglie il
+--  proprio ristorante; partite, scorte dei premi e rotazione delle domande sono
+--  separate per ristorante.
+--
+--  Flusso (un dispositivo per ristorante, usato dal personale con i clienti):
 --   * "Le casette della fortuna": 1 domanda facile. Se la risposta è giusta il
 --     cliente sceglie una delle 5 Case Ronald e il database estrae un premio
 --     a caso tra quelli ancora disponibili (in proporzione alle scorte).
@@ -56,12 +60,123 @@ $$;
 create index if not exists questions_active_idx on public.questions (is_active);
 create index if not exists questions_active_difficulty_idx on public.questions (is_active, difficulty);
 
+-- Domande dell'app "McHappy Quiz", inserite una sola volta (rieseguendo lo
+-- script non vengono duplicate né ricreate se eliminate dall'amministratore).
+create table if not exists public.seed_markers (
+  name       text primary key,
+  applied_at timestamptz not null default now()
+);
+
+do $$
+begin
+  if not exists (select 1 from public.seed_markers where name = 'domande-mchappy-v1') then
+    insert into public.questions (difficulty, question_text, answer_a, answer_b, answer_c, answer_d, correct_answer)
+    select v.difficulty, v.question_text, v.a, v.b, v.c, v.d, v.correct
+    from (values
+    (0, 'Di che colore sono gli archi del logo McDonald''s?', 'Gialli (dorati)', 'Rossi', 'Verdi', 'Blu', 'A'),
+    (0, 'Come si chiama il menu dedicato ai bambini?', 'Junior Box', 'Happy Meal', 'Mini Menu', 'Kids Burger', 'B'),
+    (0, 'Quale panino ha due hamburger e tre strati di pane?', 'Cheeseburger', 'McChicken', 'Big Mac', 'Filet-O-Fish', 'C'),
+    (0, 'Di quale animale è la carne dei Chicken McNuggets?', 'Manzo', 'Maiale', 'Pesce', 'Pollo', 'D'),
+    (0, 'Da quale ortaggio si ricavano le patatine fritte?', 'Patate', 'Carote', 'Zucchine', 'Mais', 'A'),
+    (0, 'Quale formaggio caratterizza il Cheeseburger?', 'Mozzarella', 'Cheddar', 'Gorgonzola', 'Parmigiano', 'B'),
+    (0, 'Come si chiama il servizio per ordinare in auto?', 'McCafé', 'McFlurry', 'McDrive', 'McMenu', 'C'),
+    (0, 'In quale Paese è nato McDonald''s?', 'Canada', 'Regno Unito', 'Australia', 'Stati Uniti', 'D'),
+    (0, 'Come si chiama il celebre clown di McDonald''s?', 'Ronald McDonald', 'Happy Clown', 'Mister Burger', 'Big Mac Joe', 'A'),
+    (0, 'Il Filet-O-Fish contiene carne o pesce?', 'Carne di manzo', 'Pesce', 'Pollo', 'Maiale', 'B'),
+    (0, 'Quanti hamburger contiene il Double Cheeseburger?', 'Uno', 'Tre', 'Due', 'Quattro', 'C'),
+    (0, 'Come si chiama il dessert al gelato mescolato con guarnizioni?', 'Milkshake', 'Ghiacciolo', 'Tiramisù', 'McFlurry', 'D'),
+    (0, 'Qual è il celebre slogan inglese di McDonald''s?', 'I''m lovin'' it', 'Just do it', 'Think different', 'Taste the feeling', 'A'),
+    (0, 'Quale lettera rappresentano gli archi dorati?', 'W', 'M', 'D', 'A', 'B'),
+    (0, 'Come si chiama la nostra iniziativa di beneficenza?', 'Big Mac Festival', 'Ronald Week', 'McHappy Days', 'McFriends Day', 'C'),
+    (0, 'Quale verdura verde a fette contiene il classico Hamburger?', 'Zucchine', 'Peperoni verdi', 'Spinaci', 'Cetriolini', 'D'),
+    (0, 'Quanti hamburger contiene il classico Cheeseburger?', 'Uno', 'Due', 'Tre', 'Nessuno', 'A'),
+    (0, 'Cosa significa Chicken in italiano?', 'Formaggio', 'Pollo', 'Patatine', 'Panino', 'B'),
+    (0, 'Quale panino contiene un filetto di pesce?', 'McChicken', 'Big Mac', 'Filet-O-Fish', 'Cheeseburger', 'C'),
+    (0, 'Quale panino prende il nome dal formaggio?', 'Big Mac', 'McChicken', 'Hamburger', 'Cheeseburger', 'D'),
+    (0, 'Di quale carne è fatto il classico Hamburger?', 'Manzo', 'Pollo', 'Maiale', 'Pesce', 'A'),
+    (0, 'Quale panino contiene due hamburger e si chiama Double?', 'McChicken', 'Double Cheeseburger', 'Filet-O-Fish', 'Hamburger', 'B'),
+    (0, 'Il Big Mac contiene insalata?', 'No, solo carne e formaggio', 'No, solo pomodoro', 'Sì, lattuga', 'Solo nella versione vegetariana', 'C'),
+    (0, 'Quale salsa rossa troviamo nel classico Hamburger?', 'Senape', 'Maionese', 'Salsa tartara', 'Ketchup', 'D'),
+    (0, 'Come si chiamano i bocconcini di pollo di McDonald''s?', 'Chicken McNuggets', 'McFlurry', 'McCafé', 'Big Mac', 'A'),
+    (0, 'Quale salsa è conosciuta con la sigla BBQ?', 'Basilico', 'Barbecue', 'Besciamella', 'Burro', 'B'),
+    (0, 'Quale frutto dà il gusto alla Fanta classica?', 'Limone', 'Fragola', 'Arancia', 'Mela', 'C'),
+    (0, 'Quale bevanda gassata scura è molto famosa da McDonald''s?', 'Sprite', 'Fanta', 'Acqua tonica', 'Coca-Cola', 'D'),
+    (0, 'Come si chiama il gelato in coppetta con salsa?', 'Sundae', 'Milkshake', 'Cono', 'Ghiacciolo', 'A'),
+    (0, 'Completa lo slogan: I''m lovin''…', 'you', 'it', 'burger', 'food', 'B'),
+    (0, 'Quale sorpresa si può trovare nell''Happy Meal?', 'Una bicicletta', 'Un telefono', 'Un gioco o un libro', 'Un buono benzina', 'C'),
+    (0, 'Quanti archi compongono il logo McDonald''s?', 'Uno', 'Tre', 'Quattro', 'Due', 'D'),
+    (0, 'Cosa significa Happy in italiano?', 'Felice', 'Affamato', 'Veloce', 'Grande', 'A'),
+    (0, 'Le Case Ronald aiutano le famiglie dei bambini ricoverati?', 'No, sono ristoranti speciali', 'Sì, le ospitano vicino all''ospedale', 'No, sono parchi giochi', 'No, sono scuole di cucina', 'B'),
+    (0, 'Quante Case Ronald sono rappresentate nel nostro gioco?', 'Tre', 'Quattro', 'Cinque', 'Sei', 'C'),
+    (0, 'Qual è il nostro obiettivo di raccolta fondi in euro?', '500 €', '1.000 €', '3.000 €', '1.500 €', 'D'),
+    (0, 'In quale mese terminano i nostri McHappy Days?', 'Dicembre', 'Ottobre', 'Novembre', 'Gennaio', 'A'),
+    (0, 'Qual è il superpremio della sfida delle tre domande?', 'Happy Meal', 'Big Mac', 'McFlurry', 'Cheeseburger', 'B'),
+    (1, 'Quanti hamburger di manzo contiene il Big Mac?', 'Uno', 'Tre', 'Due', 'Quattro', 'C'),
+    (1, 'Come si chiama la salsa caratteristica del Big Mac?', 'Salsa barbecue', 'Ketchup', 'Salsa tartara', 'Salsa Big Mac', 'D'),
+    (1, 'Quali semi si trovano sul pane del Big Mac?', 'Sesamo', 'Girasole', 'Papavero', 'Zucca', 'A'),
+    (1, 'Quale verdura a foglia verde contiene il Big Mac?', 'Spinaci', 'Lattuga', 'Rucola', 'Cavolo', 'B'),
+    (1, 'Quale ingrediente distingue il Cheeseburger dall''Hamburger?', 'Bacon', 'Pomodoro', 'Formaggio', 'Uovo', 'C'),
+    (1, 'Il classico Big Mac contiene bacon?', 'Sì, due fette', 'Sì, una fetta', 'Solo nel menu maxi', 'No', 'D'),
+    (1, 'Il classico Big Mac contiene pomodoro fresco?', 'No', 'Sì, due fette', 'Sì, una fetta', 'Solo d''estate', 'A'),
+    (1, 'Quale salsa accompagna il Filet-O-Fish?', 'Ketchup', 'Salsa tartara', 'Salsa barbecue', 'Senape', 'B'),
+    (1, 'Come si chiama il marchio dedicato alla caffetteria?', 'McDrive', 'McFlurry', 'McCafé', 'McMenu', 'C'),
+    (1, 'Quale panino ha una fetta di pane al centro?', 'Cheeseburger', 'McChicken', 'Filet-O-Fish', 'Big Mac', 'D'),
+    (1, 'Quale salsa gialla si trova nel classico Hamburger oltre al ketchup?', 'Senape', 'Salsa barbecue', 'Salsa tartara', 'Salsa agrodolce', 'A'),
+    (1, 'Quale ortaggio dal sapore intenso contiene il Big Mac oltre a lattuga e cetriolini?', 'Pomodoro', 'Cipolla', 'Peperone', 'Carota', 'B'),
+    (1, 'In quale città si trova lo storico McDonald''s di Piazza di Spagna?', 'Milano', 'Firenze', 'Roma', 'Napoli', 'C'),
+    (1, 'Qual è il cognome dei fratelli fondatori?', 'Kroc', 'Turner', 'Johnson', 'McDonald', 'D'),
+    (1, 'Come si dice servizio da asporto in inglese?', 'Take away', 'Drive in', 'Dine in', 'Fast lane', 'A'),
+    (1, 'Come si chiama lo schermo touch per ordinare autonomamente?', 'McDrive', 'Kiosk (totem)', 'McCafé', 'Happy Meal', 'B'),
+    (1, 'Quale fondazione sostiene le famiglie dei bambini ricoverati?', 'Fondazione Big Mac', 'Fondazione Happy Meal', 'Fondazione Ronald McDonald', 'Fondazione McCafé', 'C'),
+    (1, 'Quanti strati di pane ha il Big Mac?', 'Due', 'Quattro', 'Uno', 'Tre', 'D'),
+    (2, 'In quale anno i fratelli McDonald aprirono il ristorante a San Bernardino?', '1940', '1930', '1950', '1960', 'A'),
+    (2, 'In quale Stato americano si trova San Bernardino?', 'Texas', 'California', 'Florida', 'Nevada', 'B'),
+    (2, 'Quale imprenditore contribuì all''espansione mondiale di McDonald''s?', 'Henry Ford', 'Walt Disney', 'Ray Kroc', 'Dave Thomas', 'C'),
+    (2, 'In quale anno Ray Kroc aprì il suo primo McDonald''s in Illinois?', '1945', '1965', '1975', '1955', 'D'),
+    (2, 'In quale città dell''Illinois Ray Kroc aprì il suo primo McDonald''s?', 'Des Plaines', 'Chicago', 'Springfield', 'Rockford', 'A'),
+    (2, 'In quale anno il Big Mac debuttò a livello nazionale negli USA?', '1958', '1968', '1978', '1988', 'B'),
+    (2, 'Chi inventò il Big Mac?', 'Ray Kroc', 'Richard McDonald', 'Jim Delligatti', 'Fred Turner', 'C'),
+    (2, 'In quale anno fu introdotto a livello nazionale negli USA l''Happy Meal?', '1969', '1989', '1999', '1979', 'D'),
+    (2, 'In quale anno aprì il primo McDonald''s italiano a Bolzano?', '1985', '1975', '1990', '1995', 'A'),
+    (2, 'Quale fu la prima città italiana ad avere un McDonald''s?', 'Roma', 'Bolzano', 'Milano', 'Torino', 'B'),
+    (2, 'In quale anno aprì la prima Casa Ronald McDonald nel mondo?', '1964', '1984', '1974', '1994', 'C'),
+    (2, 'In quale città americana aprì la prima Casa Ronald McDonald?', 'Boston', 'Chicago', 'New York', 'Philadelphia', 'D'),
+    (2, 'In quale Paese nacque il primo McCafé nel 1993?', 'Australia', 'Canada', 'Stati Uniti', 'Regno Unito', 'A'),
+    (2, 'Come si chiama l''indice economico di The Economist basato sul prezzo di un panino?', 'Indice Dow Jones', 'Indice Big Mac', 'Indice Nasdaq', 'Indice S&P 500', 'B')
+    ) as v(difficulty, question_text, a, b, c, d, correct)
+    where not exists (
+      select 1 from public.questions q where lower(btrim(q.question_text)) = lower(btrim(v.question_text))
+    );
+    insert into public.seed_markers (name) values ('domande-mchappy-v1');
+  end if;
+end;
+$$;
+
+-- -----------------------------------------------------------------------------
+--  Ristoranti
+-- -----------------------------------------------------------------------------
+
+create table if not exists public.restaurants (
+  key        text primary key check (key ~ '^[a-z0-9-]{2,30}$'),
+  name       text not null check (char_length(btrim(name)) between 1 and 60),
+  sort_order integer not null default 0
+);
+
+insert into public.restaurants (key, name, sort_order) values
+  ('merlata', 'McDonald''s Merlata', 1),
+  ('rho',     'McDonald''s Rho',     2),
+  ('bonola',  'McDonald''s Bonola',  3),
+  ('magenta', 'McDonald''s Magenta', 4)
+on conflict (key) do nothing;
+
 -- -----------------------------------------------------------------------------
 --  Premi (con scorte)
 -- -----------------------------------------------------------------------------
 
--- pool 'casette': estratti a caso dopo la scelta della casetta, con scorte.
+-- pool 'casette': estratti a caso dopo la scelta della casetta, con scorte
+--                 separate per ristorante (restaurant_stock).
 -- pool 'bigmac' : premio della sfida a tre domande (senza scorte).
+-- Nome, messaggio e foto sono comuni a tutti i ristoranti.
 create table if not exists public.prizes (
   key         text primary key check (key in (
                 'braccialetto', 'hamburger', 'nuggets', 'patatine', 'cono', 'profumatore', 'gadget', 'bigmac')),
@@ -69,23 +184,44 @@ create table if not exists public.prizes (
   label       text not null check (char_length(btrim(label)) between 1 and 40),
   win_message text check (win_message is null or char_length(btrim(win_message)) between 1 and 120),
   image_path  text,
-  stock       integer check (stock is null or stock between 0 and 99999),
   sort_order  integer not null default 0,
-  updated_at  timestamptz not null default now(),
-  check ((pool = 'casette') = (stock is not null))
+  updated_at  timestamptz not null default now()
 );
 
--- Scorte iniziali: inserite solo la prima volta (rieseguire lo script non le azzera).
-insert into public.prizes (key, pool, label, stock, sort_order) values
-  ('braccialetto', 'casette', 'Braccialetto',     55, 1),
-  ('hamburger',    'casette', 'Hamburger',        10, 2),
-  ('nuggets',      'casette', 'Nuggets',          10, 3),
-  ('patatine',     'casette', 'Patatine piccole', 10, 4),
-  ('cono',         'casette', 'Cono',             10, 5),
-  ('profumatore',  'casette', 'Profumatore auto', 10, 6),
-  ('gadget',       'casette', 'Gadget vario',     50, 7),
-  ('bigmac',       'bigmac',  'Big Mac',        null, 8)
+-- Versione precedente: le scorte erano uniche (colonna prizes.stock). Ora sono
+-- per ristorante; la vecchia colonna (e il suo vincolo) viene rimossa.
+alter table public.prizes drop column if exists stock;
+
+insert into public.prizes (key, pool, label, sort_order) values
+  ('braccialetto', 'casette', 'Braccialetto',     1),
+  ('hamburger',    'casette', 'Hamburger',        2),
+  ('nuggets',      'casette', 'Nuggets',          3),
+  ('patatine',     'casette', 'Patatine piccole', 4),
+  ('cono',         'casette', 'Cono',             5),
+  ('profumatore',  'casette', 'Profumatore auto', 6),
+  ('gadget',       'casette', 'Gadget vario',     7),
+  ('bigmac',       'bigmac',  'Big Mac',          8)
 on conflict (key) do nothing;
+
+-- Pezzi disponibili per ristorante (solo premi delle casette).
+create table if not exists public.restaurant_stock (
+  restaurant_key text not null references public.restaurants (key) on delete cascade,
+  prize_key      text not null references public.prizes (key) on delete cascade,
+  stock          integer not null check (stock between 0 and 99999),
+  updated_at     timestamptz not null default now(),
+  primary key (restaurant_key, prize_key)
+);
+
+-- Scorte iniziali di ogni ristorante: inserite solo la prima volta
+-- (rieseguire lo script non le azzera).
+insert into public.restaurant_stock (restaurant_key, prize_key, stock)
+select r.key, d.prize_key, d.stock
+from public.restaurants r
+cross join (values
+  ('braccialetto', 55), ('hamburger', 10), ('nuggets', 10), ('patatine', 10),
+  ('cono', 10), ('profumatore', 10), ('gadget', 50)
+) as d(prize_key, stock)
+on conflict (restaurant_key, prize_key) do nothing;
 
 -- Le foto già caricate nella versione precedente (braccialetto, cono) restano.
 do $$
@@ -125,6 +261,7 @@ create table if not exists public.games (
   house       text check (house is null or public.is_valid_house(house)),
   prize_key   text references public.prizes (key),
   play_date   date not null,
+  -- (null solo per le partite di prova della versione senza ristoranti)
   created_at  timestamptz not null default now(),
   finished_at timestamptz,
   check (mode = 'bigmac' or step = 1),
@@ -132,7 +269,10 @@ create table if not exists public.games (
   check ((status in ('playing', 'pick_house')) = (finished_at is null))
 );
 
+alter table public.games add column if not exists restaurant_key text references public.restaurants (key);
+
 create index if not exists games_date_idx on public.games (play_date);
+create index if not exists games_restaurant_idx on public.games (restaurant_key, play_date);
 create index if not exists games_status_idx on public.games (status);
 
 -- Domande assegnate nelle partite. Restano anche dopo l'azzeramento delle
@@ -151,7 +291,10 @@ create table if not exists public.game_questions (
   check ((selected_answer is null) = (is_correct is null))
 );
 
+alter table public.game_questions add column if not exists restaurant_key text references public.restaurants (key);
+
 create index if not exists game_questions_question_idx on public.game_questions (question_id, assigned_at desc);
+create index if not exists game_questions_restaurant_idx on public.game_questions (restaurant_key, question_id, assigned_at desc);
 
 -- Rate limiting persistente (login del personale).
 create table if not exists public.rate_limits (
@@ -198,6 +341,7 @@ declare
 begin
   foreach t in array array[
     'questions', 'prizes', 'games', 'game_questions', 'rate_limits',
+    'restaurants', 'restaurant_stock', 'seed_markers',
     'daily_questions', 'responses', 'prize_settings', 'participants',
     'entry_qr_codes', 'prize_codes', 'daily_question_assignments'
   ]
@@ -239,6 +383,12 @@ drop function if exists public.admin_reset_stats(boolean);
 drop function if exists public.admin_list_prize_settings();
 drop function if exists public.admin_update_prize(text, text, text);
 drop function if exists public.admin_set_prize_image(text, text);
+-- Versione senza ristoranti
+drop function if exists public.casette_stock_left();
+drop function if exists public.game_availability();
+drop function if exists public.start_game(text, date);
+drop function if exists public.admin_get_stats(date);
+drop function if exists public.admin_update_prize(text, text, text, integer);
 
 -- -----------------------------------------------------------------------------
 --  Utility
@@ -264,28 +414,31 @@ as $$
   select (case p_mode when 'bigmac' then 3 else 1 end)::smallint;
 $$;
 
--- Pezzi ancora disponibili per le casette.
-create or replace function public.casette_stock_left()
+-- Pezzi ancora disponibili per le casette in un ristorante (null = tutti).
+create or replace function public.casette_stock_left(p_restaurant text)
 returns integer
 language sql
 stable
 set search_path = public
 as $$
-  select coalesce(sum(stock), 0)::int from public.prizes where pool = 'casette';
+  select coalesce(sum(rs.stock), 0)::int
+  from public.restaurant_stock rs
+  join public.prizes p on p.key = rs.prize_key and p.pool = 'casette'
+  where p_restaurant is null or rs.restaurant_key = p_restaurant;
 $$;
 
--- Disponibilità dei due giochi: 'ok' | 'no_questions' | 'no_stock'.
-create or replace function public.game_availability()
+-- Disponibilità dei due giochi in un ristorante: 'ok' | 'no_questions' | 'no_stock'.
+create or replace function public.game_availability(p_restaurant text)
 returns jsonb
 language sql
 stable
 set search_path = public
 as $$
   select jsonb_build_object(
-    'stock_left', public.casette_stock_left(),
+    'stock_left', public.casette_stock_left(p_restaurant),
     'casette', case
       when not exists (select 1 from public.questions where is_active and difficulty = 0) then 'no_questions'
-      when public.casette_stock_left() = 0 then 'no_stock'
+      when public.casette_stock_left(p_restaurant) = 0 then 'no_stock'
       else 'ok' end,
     'bigmac', case
       when (select count(distinct difficulty) from public.questions where is_active) < 3 then 'no_questions'
@@ -299,7 +452,8 @@ $$;
 -- se sono già state usate tutte, una del terzo usato MENO DI RECENTE. Una domanda appena uscita non può quindi
 -- ripresentarsi prima che ne siano uscite almeno i 2/3 delle altre.
 -- Se per quella difficoltà non c'è nulla (es. disattivata a metà partita) si
--- usa qualsiasi altra domanda attiva. L'advisory lock serializza le assegnazioni.
+-- usa qualsiasi altra domanda attiva. La rotazione è per ristorante (ogni
+-- ristorante ha la sua fila di clienti). L'advisory lock serializza le assegnazioni.
 create or replace function public.assign_game_question(p_game uuid, p_step smallint)
 returns uuid
 language plpgsql
@@ -308,18 +462,21 @@ set search_path = public
 as $$
 declare
   v_mode       text;
+  v_restaurant text;
   v_difficulty smallint;
   v_pick       uuid;
 begin
-  perform pg_advisory_xact_lock(hashtext('quiz_assign'));
+  select mode, restaurant_key into v_mode, v_restaurant from public.games where id = p_game;
+  perform pg_advisory_xact_lock(hashtext('quiz_assign:' || coalesce(v_restaurant, '')));
 
-  select mode into v_mode from public.games where id = p_game;
   v_difficulty := case when v_mode = 'bigmac' then p_step - 1 else 0 end;
 
   for attempt in 1..2 loop
     with pool as (
       select q.id,
-             (select max(gq.assigned_at) from public.game_questions gq where gq.question_id = q.id) as last_used
+             (select max(gq.assigned_at) from public.game_questions gq
+               where gq.question_id = q.id
+                 and gq.restaurant_key is not distinct from v_restaurant) as last_used
       from public.questions q
       where q.is_active
         and (attempt = 2 or q.difficulty = v_difficulty)
@@ -348,8 +505,8 @@ begin
     return null;
   end if;
 
-  insert into public.game_questions (game_id, step, difficulty, question_id)
-  values (p_game, p_step, v_difficulty, v_pick);
+  insert into public.game_questions (game_id, step, difficulty, question_id, restaurant_key)
+  values (p_game, p_step, v_difficulty, v_pick, v_restaurant);
   return v_pick;
 end;
 $$;
@@ -359,7 +516,7 @@ $$;
 -- -----------------------------------------------------------------------------
 
 -- status: 'ok' (con game_id) | 'no_questions' | 'no_stock'
-create or replace function public.start_game(p_mode text, p_date date default null)
+create or replace function public.start_game(p_mode text, p_restaurant text, p_date date default null)
 returns jsonb
 language plpgsql
 volatile
@@ -373,14 +530,17 @@ begin
   if p_mode is null or p_mode not in ('casette', 'bigmac') then
     raise exception 'invalid_mode' using errcode = '22023';
   end if;
+  if p_restaurant is null or not exists (select 1 from public.restaurants where key = p_restaurant) then
+    raise exception 'invalid_restaurant' using errcode = '22023';
+  end if;
 
-  v_avail := public.game_availability();
+  v_avail := public.game_availability(p_restaurant);
   if v_avail->>p_mode <> 'ok' then
     return jsonb_build_object('status', v_avail->>p_mode);
   end if;
 
-  insert into public.games (mode, play_date)
-  values (p_mode, coalesce(p_date, public.rome_today()))
+  insert into public.games (mode, restaurant_key, play_date)
+  values (p_mode, p_restaurant, coalesce(p_date, public.rome_today()))
   returning id into v_game;
 
   if public.assign_game_question(v_game, 1::smallint) is null then
@@ -403,6 +563,7 @@ as $$
   select jsonb_build_object(
     'game_id',       g.id,
     'mode',          g.mode,
+    'restaurant',    g.restaurant_key,
     'status',        g.status,
     'step',          g.step,
     'total_steps',   public.game_total_steps(g.mode),
@@ -476,7 +637,7 @@ begin
   if not v_ok then
     update public.games set status = 'lost', finished_at = now() where id = p_game;
   elsif v_g.mode = 'casette' then
-    if public.casette_stock_left() > 0 then
+    if public.casette_stock_left(v_g.restaurant_key) > 0 then
       update public.games set status = 'pick_house' where id = p_game;
     else
       -- Premi esauriti: risposta giusta ma niente da estrarre.
@@ -524,22 +685,26 @@ begin
     return jsonb_build_object('status', 'not_allowed');
   end if;
 
-  perform 1 from public.prizes where pool = 'casette' for update;
-  v_total := public.casette_stock_left();
+  -- Lock sulle scorte del ristorante: due estrazioni simultanee non possono
+  -- assegnare lo stesso ultimo pezzo.
+  perform 1 from public.restaurant_stock where restaurant_key = v_g.restaurant_key for update;
+  v_total := public.casette_stock_left(v_g.restaurant_key);
 
   if v_total > 0 then
     v_r := floor(random() * v_total)::int; -- 0 .. v_total - 1
-    select t.key into v_key
+    select t.prize_key into v_key
     from (
-      select key, sum(stock) over (order by sort_order, key) as cum
-      from public.prizes
-      where pool = 'casette' and stock > 0
+      select rs.prize_key, sum(rs.stock) over (order by p.sort_order, p.key) as cum
+      from public.restaurant_stock rs
+      join public.prizes p on p.key = rs.prize_key and p.pool = 'casette'
+      where rs.restaurant_key = v_g.restaurant_key and rs.stock > 0
     ) t
     where t.cum > v_r
     order by t.cum
     limit 1;
 
-    update public.prizes set stock = stock - 1 where key = v_key;
+    update public.restaurant_stock set stock = stock - 1, updated_at = now()
+     where restaurant_key = v_g.restaurant_key and prize_key = v_key;
   end if;
 
   update public.games
@@ -747,7 +912,8 @@ $$;
 --  Amministrazione: statistiche
 -- -----------------------------------------------------------------------------
 
-create or replace function public.admin_get_stats(p_date date default null)
+-- Statistiche: p_restaurant null = tutti i ristoranti.
+create or replace function public.admin_get_stats(p_date date default null, p_restaurant text default null)
 returns jsonb
 language sql
 stable
@@ -755,35 +921,58 @@ security definer
 set search_path = public
 as $$
   with d as (select coalesce(p_date, public.rome_today()) as day),
+  g as (
+    select * from public.games
+    where p_restaurant is null or restaurant_key = p_restaurant
+  ),
   per_mode as (
     select m.mode,
            jsonb_build_object(
-             'played',      count(g.id) filter (where g.status <> 'abandoned'),
-             'won',         count(g.id) filter (where g.status = 'won'),
-             'lost',        count(g.id) filter (where g.status = 'lost'),
+             'played',       count(g.id) filter (where g.status <> 'abandoned'),
+             'won',          count(g.id) filter (where g.status = 'won'),
+             'lost',         count(g.id) filter (where g.status = 'lost'),
              'today_played', count(g.id) filter (where g.status <> 'abandoned' and g.play_date = (select day from d)),
-             'today_won',   count(g.id) filter (where g.status = 'won' and g.play_date = (select day from d))
+             'today_won',    count(g.id) filter (where g.status = 'won' and g.play_date = (select day from d))
            ) as v
     from (values ('casette'), ('bigmac')) m(mode)
-    left join public.games g on g.mode = m.mode
+    left join g on g.mode = m.mode
     group by m.mode
   )
   select jsonb_build_object(
     'date',          (select day from d),
+    'restaurant',    p_restaurant,
     'casette',       (select v from per_mode where mode = 'casette'),
     'bigmac',        (select v from per_mode where mode = 'bigmac'),
-    'abandoned',     (select count(*) from public.games where status = 'abandoned'),
-    'stock_left',    public.casette_stock_left(),
+    'abandoned',     (select count(*) from g where status = 'abandoned'),
+    'stock_left',    public.casette_stock_left(p_restaurant),
     'prizes',        (select coalesce(jsonb_agg(jsonb_build_object(
                         'key', p.key,
                         'pool', p.pool,
                         'label', p.label,
-                        'stock', p.stock,
-                        'won', (select count(*) from public.games g where g.prize_key = p.key),
-                        'won_today', (select count(*) from public.games g
+                        'stock', case when p.pool = 'casette' then
+                                   (select coalesce(sum(rs.stock), 0) from public.restaurant_stock rs
+                                     where rs.prize_key = p.key
+                                       and (p_restaurant is null or rs.restaurant_key = p_restaurant)) end,
+                        'won', (select count(*) from g where g.prize_key = p.key),
+                        'won_today', (select count(*) from g
                                        where g.prize_key = p.key and g.play_date = (select day from d)))
                       order by p.sort_order), '[]'::jsonb)
                       from public.prizes p),
+    'restaurants',   (select coalesce(jsonb_agg(jsonb_build_object(
+                        'key', r.key,
+                        'name', r.name,
+                        'played', (select count(*) from public.games x
+                                    where x.restaurant_key = r.key and x.status <> 'abandoned'),
+                        'today_played', (select count(*) from public.games x
+                                          where x.restaurant_key = r.key and x.status <> 'abandoned'
+                                            and x.play_date = (select day from d)),
+                        'casette_won', (select count(*) from public.games x
+                                         where x.restaurant_key = r.key and x.mode = 'casette' and x.status = 'won'),
+                        'bigmac_won', (select count(*) from public.games x
+                                        where x.restaurant_key = r.key and x.mode = 'bigmac' and x.status = 'won'),
+                        'stock_left', public.casette_stock_left(r.key))
+                      order by r.sort_order), '[]'::jsonb)
+                      from public.restaurants r),
     'total_questions',  (select count(*) from public.questions),
     'active_by_difficulty', (select jsonb_agg(
                                (select count(*) from public.questions q where q.is_active and q.difficulty = lvl)
@@ -805,7 +994,6 @@ as $$
 declare
   v_games integer;
 begin
-  perform pg_advisory_xact_lock(hashtext('quiz_assign'));
   delete from public.games;
   get diagnostics v_games = row_count;
   return jsonb_build_object('games_deleted', v_games);
@@ -825,14 +1013,16 @@ set search_path = public
 as $$
   select coalesce(jsonb_agg(jsonb_build_object(
            'key', p.key, 'pool', p.pool, 'label', p.label, 'win_message', p.win_message,
-           'image_path', p.image_path, 'stock', p.stock, 'updated_at', p.updated_at)
+           'image_path', p.image_path, 'updated_at', p.updated_at,
+           'stocks', case when p.pool = 'casette' then
+                       (select coalesce(jsonb_object_agg(rs.restaurant_key, rs.stock), '{}'::jsonb)
+                          from public.restaurant_stock rs where rs.prize_key = p.key) end)
          order by p.sort_order), '[]'::jsonb)
   from public.prizes p;
 $$;
 
--- Modifica nome, messaggio di vittoria e (solo casette) pezzi disponibili.
--- p_stock null = scorta invariata.
-create or replace function public.admin_update_prize(p_key text, p_label text, p_win_message text, p_stock integer)
+-- Modifica nome e messaggio di vittoria (comuni a tutti i ristoranti).
+create or replace function public.admin_update_prize(p_key text, p_label text, p_win_message text)
 returns jsonb
 language plpgsql
 volatile
@@ -844,8 +1034,7 @@ declare
 begin
   update public.prizes
      set label = btrim(p_label),
-         win_message = nullif(btrim(coalesce(p_win_message, '')), ''),
-         stock = case when pool = 'casette' then coalesce(p_stock, stock) else null end
+         win_message = nullif(btrim(coalesce(p_win_message, '')), '')
    where key = p_key
   returning * into v_row;
   if not found then
@@ -853,6 +1042,38 @@ begin
   end if;
   return to_jsonb(v_row);
 end;
+$$;
+
+-- Pezzi disponibili di un premio delle casette in un ristorante.
+create or replace function public.admin_set_stock(p_restaurant text, p_prize text, p_stock integer)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public
+as $$
+begin
+  if not exists (select 1 from public.restaurants where key = p_restaurant)
+     or not exists (select 1 from public.prizes where key = p_prize and pool = 'casette') then
+    return null;
+  end if;
+  insert into public.restaurant_stock (restaurant_key, prize_key, stock)
+  values (p_restaurant, p_prize, p_stock)
+  on conflict (restaurant_key, prize_key) do update set stock = excluded.stock, updated_at = now();
+  return jsonb_build_object('restaurant', p_restaurant, 'prize', p_prize, 'stock', p_stock);
+end;
+$$;
+
+-- Elenco dei ristoranti.
+create or replace function public.list_restaurants()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(jsonb_agg(jsonb_build_object('key', key, 'name', name) order by sort_order), '[]'::jsonb)
+  from public.restaurants;
 $$;
 
 -- Imposta la nuova foto e restituisce il percorso precedente (da eliminare).
@@ -907,10 +1128,10 @@ begin
     'public.rome_today()',
     'public.is_valid_house(text)',
     'public.game_total_steps(text)',
-    'public.casette_stock_left()',
-    'public.game_availability()',
+    'public.casette_stock_left(text)',
+    'public.game_availability(text)',
     'public.assign_game_question(uuid, smallint)',
-    'public.start_game(text, date)',
+    'public.start_game(text, text, date)',
     'public.get_game_state(uuid)',
     'public.submit_game_answer(uuid, text)',
     'public.pick_house(uuid, text)',
@@ -923,10 +1144,12 @@ begin
     'public.admin_update_question(uuid, text, text, text, text, text, text, integer, boolean)',
     'public.admin_set_question_active(uuid, boolean)',
     'public.admin_delete_question(uuid)',
-    'public.admin_get_stats(date)',
+    'public.admin_get_stats(date, text)',
     'public.admin_reset_stats()',
     'public.admin_list_prizes()',
-    'public.admin_update_prize(text, text, text, integer)',
+    'public.admin_update_prize(text, text, text)',
+    'public.admin_set_stock(text, text, integer)',
+    'public.list_restaurants()',
     'public.admin_set_prize_image(text, text)'
   ]
   loop

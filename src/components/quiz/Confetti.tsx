@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 
-const COLORS = ["#ffc72c", "#da291c", "#ffffff", "#27ae60", "#ffe08a", "#ff8a65"];
+const COLORS = ["#ffc72c", "#c8102e", "#ffffff", "#27ae60", "#ffe08a", "#ff8a65"];
 
 // Valori pseudo-casuali deterministici (stesso output su server e client).
 function rand(seed: number) {

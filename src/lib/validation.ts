@@ -57,6 +57,23 @@ export const houseSchema = z.object({
 
 export const prizeKeySchema = z.enum(PRIZE_KEYS);
 
+const restaurantKey = z.string({ error: "Ristorante non valido" }).regex(/^[a-z0-9-]{2,30}$/, {
+  error: "Ristorante non valido",
+});
+
+export const restaurantSchema = z.object({ restaurant: restaurantKey });
+
+/** Pezzi disponibili di un premio in un ristorante. */
+export const stockUpdateSchema = z.object({
+  restaurant: restaurantKey,
+  prize: prizeKeySchema,
+  stock: z
+    .number({ error: "Pezzi disponibili: inserisci un numero" })
+    .int({ error: "Pezzi disponibili: numero intero" })
+    .min(0, { error: "Pezzi disponibili: minimo 0" })
+    .max(99999, { error: "Pezzi disponibili: massimo 99999" }),
+});
+
 export const loginSchema = z.object({
   username: z.string().trim().min(1, { error: "Inserisci il nome utente" }).max(100),
   password: z.string().min(1, { error: "Inserisci la password" }).max(200),
@@ -94,13 +111,4 @@ export const prizeUpdateSchema = z.object({
     .nullable()
     .optional()
     .transform((v) => (v ? v : null)),
-  /** Pezzi disponibili (solo premi delle casette). */
-  stock: z
-    .number({ error: "Pezzi disponibili: inserisci un numero" })
-    .int({ error: "Pezzi disponibili: numero intero" })
-    .min(0, { error: "Pezzi disponibili: minimo 0" })
-    .max(99999, { error: "Pezzi disponibili: massimo 99999" })
-    .nullable()
-    .optional()
-    .transform((v) => (v === undefined ? null : v)),
 });

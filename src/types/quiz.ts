@@ -75,8 +75,14 @@ export interface WonPrize {
   imageUrl: string | null;
 }
 
+export interface Restaurant {
+  key: string;
+  name: string;
+}
+
 /** Disponibilità dei due giochi, mostrata nella schermata iniziale. */
 export interface MenuInfo {
+  restaurant: Restaurant;
   stockLeft: number;
   casette: "ok" | "no_questions" | "no_stock";
   bigmac: "ok" | "no_questions";
@@ -84,6 +90,7 @@ export interface MenuInfo {
 
 /** Stato della postazione calcolato dal server. */
 export type GameState =
+  | { kind: "choose_restaurant"; restaurants: Restaurant[] }
   | { kind: "menu"; menu: MenuInfo }
   | { kind: "question"; mode: GameMode; step: number; totalSteps: number; question: PublicQuestion }
   | { kind: "pick_house" }
@@ -125,8 +132,21 @@ export interface PrizeStats {
   wonToday: number;
 }
 
+export interface RestaurantStats {
+  key: string;
+  name: string;
+  played: number;
+  todayPlayed: number;
+  casetteWon: number;
+  bigmacWon: number;
+  stockLeft: number;
+}
+
 export interface AdminStats {
   date: string;
+  /** Ristorante filtrato (null = tutti). */
+  restaurant: string | null;
+  restaurants: RestaurantStats[];
   casette: ModeStats;
   bigmac: ModeStats;
   abandoned: number;
@@ -144,8 +164,8 @@ export interface PrizeSetting {
   /** Messaggio personalizzato; null = predefinito. */
   winMessage: string | null;
   imageUrl: string | null;
-  /** Pezzi disponibili (solo casette; null per il Big Mac). */
-  stock: number | null;
+  /** Pezzi disponibili per ristorante (solo casette; null per il Big Mac). */
+  stocks: Record<string, number> | null;
   updatedAt: string;
 }
 

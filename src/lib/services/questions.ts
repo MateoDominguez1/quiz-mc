@@ -104,9 +104,22 @@ function toModeStats(r: ModeRow | undefined): ModeStats {
   };
 }
 
-export async function getStats(): Promise<AdminStats> {
+interface RestaurantRow {
+  key: string;
+  name: string;
+  played: number;
+  today_played: number;
+  casette_won: number;
+  bigmac_won: number;
+  stock_left: number;
+}
+
+/** Statistiche di un ristorante o di tutti (restaurant = null). */
+export async function getStats(restaurant: string | null = null): Promise<AdminStats> {
   const s = await callRpc<{
     date: string;
+    restaurant: string | null;
+    restaurants: RestaurantRow[];
     casette: ModeRow;
     bigmac: ModeRow;
     abandoned: number;
@@ -114,10 +127,20 @@ export async function getStats(): Promise<AdminStats> {
     prizes: { key: PrizeKey; pool: PrizePool; label: string; stock: number | null; won: number; won_today: number }[];
     total_questions: number;
     active_by_difficulty: number[] | null;
-  }>("admin_get_stats", { p_date: getRomeDateString() });
+  }>("admin_get_stats", { p_date: getRomeDateString(), p_restaurant: restaurant });
   const byLevel = s.active_by_difficulty ?? [];
   return {
     date: s.date,
+    restaurant: s.restaurant ?? null,
+    restaurants: (s.restaurants ?? []).map((r) => ({
+      key: r.key,
+      name: r.name,
+      played: Number(r.played),
+      todayPlayed: Number(r.today_played),
+      casetteWon: Number(r.casette_won),
+      bigmacWon: Number(r.bigmac_won),
+      stockLeft: Number(r.stock_left),
+    })),
     casette: toModeStats(s.casette),
     bigmac: toModeStats(s.bigmac),
     abandoned: Number(s.abandoned),

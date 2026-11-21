@@ -1,15 +1,16 @@
 @import "tailwindcss";
 
 @theme {
-  --color-brand-red: #da291c;
-  --color-brand-red-dark: #b71f14;
-  --color-brand-red-darker: #8f160e;
+  --color-brand-red: #c8102e;
+  --color-brand-red-dark: #a30c25;
+  --color-brand-red-darker: #7c0a1c;
   --color-brand-yellow: #ffc72c;
-  --color-brand-yellow-dark: #f2b200;
-  --color-brand-yellow-light: #fff4d1;
-  --color-ink: #000000;
-  --color-ink-soft: #3d3d3d;
-  --color-cream: #ffffff;
+  --color-brand-yellow-dark: #f0ad00;
+  --color-brand-yellow-light: #fff1c2;
+  --color-ink: #302522;
+  --color-ink-soft: #5c4d46;
+  --color-cream: #fff5d6;
+  --color-cream-dark: #ffe9a8;
 
   --font-sans: var(--font-nunito), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 
@@ -110,6 +111,29 @@ button {
 @keyframes confetti-fall {
   0% { opacity: 1; transform: translate3d(0, -20px, 0) rotate(0deg); }
   100% { opacity: 0.9; transform: translate3d(var(--drift, 30px), 110vh, 0) rotate(var(--spin, 720deg)); }
+}
+
+/* ---------- Sfondo del quiz: crema con macchie calde e puntini ---------- */
+.quiz-bg {
+  background-color: var(--color-cream);
+  background-image:
+    radial-gradient(circle at 12% 18%, rgba(255, 199, 44, 0.45) 0, transparent 38%),
+    radial-gradient(circle at 88% 8%, rgba(200, 16, 46, 0.14) 0, transparent 34%),
+    radial-gradient(circle at 85% 85%, rgba(255, 199, 44, 0.35) 0, transparent 40%),
+    radial-gradient(circle at 10% 92%, rgba(39, 174, 96, 0.12) 0, transparent 34%),
+    radial-gradient(rgba(48, 37, 34, 0.07) 1.2px, transparent 1.2px);
+  background-size: 100% 100%, 100% 100%, 100% 100%, 100% 100%, 22px 22px;
+  background-attachment: fixed;
+}
+
+.quiz-header {
+  background:
+    radial-gradient(circle at 20% 0%, rgba(255, 255, 255, 0.18) 0, transparent 45%),
+    linear-gradient(160deg, #e01436 0%, var(--color-brand-red) 45%, var(--color-brand-red-dark) 100%);
+}
+
+.title-pop {
+  text-shadow: 0 3px 0 var(--color-brand-red-darker), 0 8px 18px rgba(0, 0, 0, 0.25);
 }
 
 /* Raggi rotanti dietro al trofeo */

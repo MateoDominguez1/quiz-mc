@@ -13,6 +13,7 @@ import {
   type MenuInfo,
   type PrizeKey,
   type PublicQuestion,
+  type Restaurant,
 } from "@/types/quiz";
 
 interface QuestionRow {
@@ -28,6 +29,7 @@ interface QuestionRow {
 interface StateRow {
   game_id: string;
   mode: GameMode;
+  restaurant: string | null;
   status: "playing" | "pick_house" | "won" | "lost" | "abandoned";
   step: number;
   total_steps: number;
@@ -56,25 +58,42 @@ export function toPublicQuestion(row: QuestionRow): PublicQuestion {
   };
 }
 
-export async function getMenuInfo(): Promise<MenuInfo> {
+export async function listRestaurants(): Promise<Restaurant[]> {
+  const rows = await callRpc<{ key: string; name: string }[]>("list_restaurants");
+  return (rows ?? []).map((r) => ({ key: r.key, name: r.name }));
+}
+
+export async function findRestaurant(key: string | null): Promise<Restaurant | null> {
+  if (!key) return null;
+  return (await listRestaurants()).find((r) => r.key === key) ?? null;
+}
+
+async function menuState(restaurantKey: string | null): Promise<GameState> {
+  const restaurants = await listRestaurants();
+  const restaurant = restaurants.find((r) => r.key === restaurantKey);
+  if (!restaurant) return { kind: "choose_restaurant", restaurants };
   const r = await callRpc<{ stock_left: number; casette: MenuInfo["casette"]; bigmac: MenuInfo["bigmac"] }>(
     "game_availability",
+    { p_restaurant: restaurant.key },
   );
-  return { stockLeft: Number(r.stock_left), casette: r.casette, bigmac: r.bigmac };
+  return {
+    kind: "menu",
+    menu: { restaurant, stockLeft: Number(r.stock_left), casette: r.casette, bigmac: r.bigmac },
+  };
 }
 
 /**
- * Stato della postazione: la partita in corso (o appena conclusa) oppure,
- * se non c'è, la schermata iniziale con la scelta del gioco.
+ * Stato della postazione: scelta del ristorante (se il dispositivo non ne ha
+ * uno), la partita in corso (o appena conclusa) oppure la scelta del gioco.
  */
-export async function getGameState(gameId: string | null): Promise<GameState> {
+export async function getGameState(gameId: string | null, restaurantKey: string | null): Promise<GameState> {
   const row = gameId ? await callRpc<StateRow | null>("get_game_state", { p_game: gameId }) : null;
-  if (!row || row.status === "abandoned") {
-    return { kind: "menu", menu: await getMenuInfo() };
+  if (!row || row.status === "abandoned" || row.restaurant !== restaurantKey) {
+    return menuState(restaurantKey);
   }
   switch (row.status) {
     case "playing":
-      if (!row.question) return { kind: "menu", menu: await getMenuInfo() };
+      if (!row.question) return menuState(restaurantKey);
       return {
         kind: "question",
         mode: row.mode,
@@ -110,9 +129,10 @@ export async function getGameState(gameId: string | null): Promise<GameState> {
 
 export type StartResult = { status: "ok"; gameId: string } | { status: "no_questions" | "no_stock" };
 
-export async function startGame(mode: GameMode): Promise<StartResult> {
+export async function startGame(mode: GameMode, restaurant: string): Promise<StartResult> {
   const r = await callRpc<{ status: "ok" | "no_questions" | "no_stock"; game_id?: string }>("start_game", {
     p_mode: mode,
+    p_restaurant: restaurant,
     p_date: getRomeDateString(),
   });
   if (r.status === "ok" && r.game_id) return { status: "ok", gameId: r.game_id };

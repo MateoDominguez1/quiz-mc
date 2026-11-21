@@ -48,12 +48,8 @@ function PrizeCard({ prize }: { prize: PrizeSetting }) {
   const [savedLabel, setSavedLabel] = useState(prize.label);
   const [message, setMessage] = useState(prize.winMessage ?? "");
   const [savedMessage, setSavedMessage] = useState(prize.winMessage ?? "");
-  const hasStock = prize.pool === "casette";
-  const [stock, setStock] = useState(String(prize.stock ?? 0));
-  const [savedStock, setSavedStock] = useState(String(prize.stock ?? 0));
   const [saving, setSaving] = useState(false);
-  const dirty =
-    label.trim() !== savedLabel || message.trim() !== savedMessage || (hasStock && stock !== savedStock);
+  const dirty = label.trim() !== savedLabel || message.trim() !== savedMessage;
 
   async function saveTexts(e: FormEvent) {
     e.preventDefault();
@@ -62,15 +58,10 @@ function PrizeCard({ prize }: { prize: PrizeSetting }) {
       toast.show("error", "Inserisci il nome del premio.");
       return;
     }
-    const stockValue = hasStock ? Number(stock) : null;
-    if (hasStock && (!/^\d{1,5}$/.test(stock) || !Number.isInteger(stockValue))) {
-      toast.show("error", "Pezzi disponibili: inserisci un numero intero da 0 a 99999.");
-      return;
-    }
     setSaving(true);
     const res = await apiFetch(`/api/admin/prizes/${prize.key}`, {
       method: "PATCH",
-      body: { label: label.trim(), winMessage: message.trim() || null, stock: stockValue },
+      body: { label: label.trim(), winMessage: message.trim() || null },
     });
     setSaving(false);
     if (res.ok) {
@@ -78,8 +69,6 @@ function PrizeCard({ prize }: { prize: PrizeSetting }) {
       setSavedLabel(label.trim());
       setMessage(message.trim());
       setSavedMessage(message.trim());
-      setStock(String(stockValue ?? 0));
-      setSavedStock(String(stockValue ?? 0));
       toast.show("success", `Premio "${label.trim()}" aggiornato.`);
       router.refresh();
     } else {
@@ -121,13 +110,9 @@ function PrizeCard({ prize }: { prize: PrizeSetting }) {
     <li className="flex flex-col items-center rounded-3xl bg-white p-5 text-center shadow-sm">
       <PrizeImage prizeKey={prize.key} label={savedLabel} imageUrl={imageUrl} className="size-44" />
       <p className="mt-4 text-xl font-black">{savedLabel}</p>
-      {hasStock ? (
-        <p className={`text-sm font-bold ${savedStock === "0" ? "text-brand-red" : "text-ink-soft"}`}>
-          {savedStock === "0" ? "Esaurito: non viene più estratto" : `${savedStock} pezzi disponibili`}
-        </p>
-      ) : (
-        <p className="text-sm font-bold text-ink-soft">🍔 Premio della sfida Big Mac</p>
-      )}
+      <p className="text-sm font-bold text-ink-soft">
+        {prize.pool === "casette" ? "🏠 Premio delle casette" : "🍔 Premio della sfida Big Mac"}
+      </p>
       <p className="mt-1 text-xs font-semibold text-neutral-500">{imageUrl ? "Foto caricata" : "Nessuna foto: viene mostrata un'icona"}</p>
       <input
         ref={inputRef}
@@ -146,26 +131,6 @@ function PrizeCard({ prize }: { prize: PrizeSetting }) {
       </label>
 
       <form onSubmit={saveTexts} noValidate className="mt-5 w-full space-y-3 border-t border-neutral-100 pt-4 text-left">
-        {hasStock && (
-          <div className="space-y-1.5">
-            <label htmlFor={`stock-${prize.key}`} className="block text-sm font-extrabold">
-              Pezzi disponibili
-            </label>
-            <input
-              id={`stock-${prize.key}`}
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              value={stock}
-              maxLength={5}
-              onChange={(e) => setStock(e.target.value.replace(/\D/g, "").slice(0, 5))}
-              className="h-12 w-full rounded-2xl border-2 border-neutral-200 bg-white px-4 text-lg font-black tabular-nums outline-none focus:border-brand-yellow-dark focus:ring-4 focus:ring-brand-yellow/30"
-            />
-            <p className="text-xs font-semibold text-neutral-500">
-              Scende da solo a ogni vincita. Più pezzi = più probabilità di essere estratto.
-            </p>
-          </div>
-        )}
         <div className="space-y-1.5">
           <label htmlFor={`label-${prize.key}`} className="block text-sm font-extrabold">
             Nome del premio

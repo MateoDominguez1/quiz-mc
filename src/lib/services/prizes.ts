@@ -37,7 +37,7 @@ export async function listPrizeSettings(): Promise<PrizeSetting[]> {
       label: string;
       win_message: string | null;
       image_path: string | null;
-      stock: number | null;
+      stocks: Record<string, number> | null;
       updated_at: string;
     }[]
   >("admin_list_prizes");
@@ -47,7 +47,9 @@ export async function listPrizeSettings(): Promise<PrizeSetting[]> {
     label: r.label,
     winMessage: r.win_message,
     imageUrl: prizeImageUrl(r.image_path),
-    stock: r.stock === null ? null : Number(r.stock),
+    stocks: r.stocks
+      ? Object.fromEntries(Object.entries(r.stocks).map(([k, v]) => [k, Number(v)]))
+      : null,
     updatedAt: r.updated_at,
   }));
 }
@@ -69,20 +71,21 @@ export async function replacePrizeImage(key: PrizeKey, bytes: Uint8Array): Promi
   return prizeImageUrl(path);
 }
 
-/**
- * Modifica nome, messaggio di vittoria (null/vuoto = predefinito) e pezzi
- * disponibili (solo casette; null = invariati).
- */
-export async function updatePrize(
-  key: PrizeKey,
-  label: string,
-  winMessage: string | null,
-  stock: number | null,
-): Promise<boolean> {
+/** Modifica nome e messaggio di vittoria (null/vuoto = predefinito), comuni a tutti i ristoranti. */
+export async function updatePrize(key: PrizeKey, label: string, winMessage: string | null): Promise<boolean> {
   const row = await callRpc<unknown | null>("admin_update_prize", {
     p_key: key,
     p_label: label,
     p_win_message: winMessage,
+  });
+  return row !== null;
+}
+
+/** Pezzi disponibili di un premio delle casette in un ristorante. */
+export async function setStock(restaurant: string, prize: PrizeKey, stock: number): Promise<boolean> {
+  const row = await callRpc<unknown | null>("admin_set_stock", {
+    p_restaurant: restaurant,
+    p_prize: prize,
     p_stock: stock,
   });
   return row !== null;

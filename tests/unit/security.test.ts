@@ -6,7 +6,8 @@ import {
   answerSubmissionSchema,
   houseSchema,
   prizeKeySchema,
-  prizeUpdateSchema,
+  restaurantSchema,
+  stockUpdateSchema,
   questionInputSchema,
   startGameSchema,
 } from "@/lib/validation";
@@ -92,11 +93,15 @@ describe("validazione", () => {
     expect(prizeKeySchema.safeParse("caffe").success).toBe(false);
   });
 
-  it("pezzi disponibili: interi da 0 a 99999 (o null)", () => {
-    expect(prizeUpdateSchema.parse({ label: "Cono", stock: 10 }).stock).toBe(10);
-    expect(prizeUpdateSchema.parse({ label: "Big Mac" }).stock).toBeNull();
-    for (const bad of [-1, 1.5, 100000, "5"]) {
-      expect(prizeUpdateSchema.safeParse({ label: "Cono", stock: bad }).success, String(bad)).toBe(false);
+  it("pezzi disponibili e ristorante", () => {
+    const ok = { restaurant: "rho", prize: "cono", stock: 10 };
+    expect(stockUpdateSchema.safeParse(ok).success).toBe(true);
+    for (const stock of [-1, 1.5, 100000, "5", null]) {
+      expect(stockUpdateSchema.safeParse({ ...ok, stock }).success, String(stock)).toBe(false);
     }
+    expect(stockUpdateSchema.safeParse({ ...ok, prize: "caffe" }).success).toBe(false);
+    expect(stockUpdateSchema.safeParse({ ...ok, restaurant: "Rho Centro!" }).success).toBe(false);
+    expect(restaurantSchema.safeParse({ restaurant: "merlata" }).success).toBe(true);
+    expect(restaurantSchema.safeParse({ restaurant: "" }).success).toBe(false);
   });
 });

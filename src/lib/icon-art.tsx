@@ -12,7 +12,7 @@ export function IconArt({ size, maskable = false }: { size: number; maskable?: b
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: "#da291c",
+        background: "#c8102e",
         borderRadius: maskable ? 0 : size * 0.22,
       }}
     >
@@ -25,7 +25,7 @@ export function IconArt({ size, maskable = false }: { size: number; maskable?: b
           justifyContent: "center",
           background: "#ffc72c",
           borderRadius: inner,
-          color: "#da291c",
+          color: "#c8102e",
           fontSize: inner * 0.72,
           fontWeight: 900,
           lineHeight: 1,

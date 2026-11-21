@@ -1,6 +1,6 @@
 # Il Quiz ❓ – McHappy Days
 
-Web app per il quiz a premi dei McHappy Days, usata su **un solo dispositivo del personale** (tablet o telefono) su cui giocano i clienti, uno alla volta.
+Web app per il quiz a premi dei McHappy Days nei ristoranti **McDonald's Merlata, Rho, Bonola e Magenta**. In ogni ristorante si usa **un dispositivo del personale** (tablet o telefono) su cui giocano i clienti, uno alla volta. Ogni dispositivo sceglie il proprio ristorante: **scorte dei premi, partite e rotazione delle domande sono separate per ristorante**.
 
 Due giochi distinti:
 
@@ -10,6 +10,8 @@ Due giochi distinti:
 | 🍔 **La sfida Big Mac** | 3 domande di fila: **facile, media, difficile**. Basta un errore per perdere | Big Mac |
 
 Alla fine il personale preme **"Nuovo cliente"** e si torna alla scelta del gioco.
+
+**Domande:** lo schema importa le 70 domande dell'app "McHappy Quiz" (38 facili, 18 medie, 14 difficili) trasformate in domande a 4 risposte. Vengono inserite una sola volta: si possono poi modificare, disattivare o eliminare in `/admin`.
 
 **Domande sempre diverse:** su un unico dispositivo i clienti si susseguono, quindi una domanda appena uscita non viene riproposta subito. Prima escono tutte le domande mai usate; poi si sceglie a caso tra il terzo di domande usate meno di recente (una domanda non si ripete prima che siano uscite almeno i 2/3 delle altre della stessa difficoltà). La rotazione vale per entrambi i giochi.
 
@@ -75,6 +77,7 @@ Altri comandi: `npm run build`, `npm test`, `npm run lint`, `npm run typecheck`.
 **Dispositivo del quiz (`/`)**
 
 - La prima volta apri il sito sul dispositivo: si apre `/postazione`. Inserisci le credenziali della postazione: il dispositivo resta abilitato per 45 giorni.
+- Poi scegli **il ristorante** in cui si trova il dispositivo (si può cambiare con "Cambia ristorante" nella schermata iniziale).
 - Il cliente sceglie il gioco e risponde. Durante la partita in alto c'è **"Nuovo cliente"** (con conferma) per annullarla.
 - A fine partita (vinta o persa) la schermata resta visibile, anche ricaricando la pagina, finché il personale non preme **"Nuovo cliente"**.
 - I premi si consegnano a mano: la schermata di vittoria mostra cosa consegnare.
@@ -82,12 +85,12 @@ Altri comandi: `npm run build`, `npm test`, `npm run lint`, `npm run typecheck`.
 
 **Amministrazione (`/admin`)**
 
-- **Dashboard**: partite giocate, vincite per gioco, premi vinti e rimasti, domande attive per difficoltà, avvisi (es. mancano domande difficili, premi esauriti). Si aggiorna ogni 60 secondi.
+- **Dashboard**: riepilogo per ristorante e filtro per ristorante (Tutti / Merlata / Rho / Bonola / Magenta); partite giocate, vincite per gioco, premi vinti e rimasti, domande attive per difficoltà, avvisi (es. mancano domande difficili, premi esauriti). Si aggiorna ogni 60 secondi.
 - **Gestione delle domande**: crea, modifica, attiva/disattiva, elimina; ogni domanda ha una **difficoltà** (facile = casette e 1ª domanda Big Mac, media = 2ª, difficile = 3ª). Filtri per stato e difficoltà.
-- **Premi e scorte**: nome, messaggio di vittoria, foto e **pezzi disponibili** di ogni premio.
+- **Premi e scorte**: **pezzi disponibili per ristorante** e, comuni a tutti, nome, messaggio di vittoria e foto di ogni premio.
 - **Azzera statistiche**: elimina le partite (doppia conferma con la parola `AZZERA`). Domande, premi, foto e scorte restano.
 
-**Premi delle casette (scorte iniziali)**
+**Premi delle casette (scorte iniziali di ogni ristorante)**
 
 | Premio | Pezzi |
 | --- | --- |
@@ -122,7 +125,9 @@ L'estrazione è proporzionale ai pezzi rimasti (con 55 braccialetti e 10 coni, i
 | Tabella | Contenuto |
 | --- | --- |
 | `questions` | Domande, risposte A–D, risposta corretta, difficoltà, stato |
-| `prizes` | Premi: nome, messaggio, foto, pezzi disponibili (casette) |
+| `restaurants` | I ristoranti (Merlata, Rho, Bonola, Magenta) |
+| `prizes` | Premi: nome, messaggio, foto |
+| `restaurant_stock` | Pezzi disponibili di ogni premio in ogni ristorante |
 | `games` | Partite: gioco, stato, passo, casetta scelta, premio vinto |
 | `game_questions` | Domande assegnate a ogni passo e risposte (storico per la rotazione) |
 | `rate_limits` | Contatori anti-abuso del login |
@@ -134,6 +139,7 @@ Le tabelle delle versioni precedenti (`participants`, `entry_qr_codes`, `prize_c
 | Metodo | Endpoint | Accesso |
 | --- | --- | --- |
 | POST | `/api/postazione/login`, `/api/postazione/logout` | – |
+| POST, DELETE | `/api/postazione/restaurant` `{ restaurant }` | postazione |
 | GET | `/api/game` | postazione |
 | POST | `/api/game` `{ mode: "casette" \| "bigmac" }` | postazione |
 | DELETE | `/api/game` (nuovo cliente) | postazione |
@@ -145,7 +151,8 @@ Le tabelle delle versioni precedenti (`participants`, `entry_qr_codes`, `prize_c
 | PATCH | `/api/admin/questions/:id/status` | admin |
 | POST | `/api/admin/stats/reset` `{ confirm: "AZZERA" }` | admin |
 | GET | `/api/admin/prizes` | admin |
-| PATCH | `/api/admin/prizes/:key` `{ label, winMessage, stock }` | admin |
+| PATCH | `/api/admin/prizes/:key` `{ label, winMessage }` | admin |
+| PUT | `/api/admin/stock` `{ restaurant, prize, stock }` | admin |
 | POST | `/api/admin/prizes/:key/image` (multipart) | admin |
 
 ## 11. Test

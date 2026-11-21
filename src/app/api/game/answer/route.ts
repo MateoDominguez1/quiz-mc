@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { getCurrentGameId } from "@/lib/game-session";
+import { getCurrentGameId, getCurrentRestaurant } from "@/lib/game-session";
 import { errorJson, guardStaff, handleUnexpected, json, readJson } from "@/lib/http";
 import { getGameState, submitAnswer } from "@/lib/services/quiz";
 import { answerSubmissionSchema } from "@/lib/validation";
@@ -21,13 +21,13 @@ export async function POST(req: NextRequest) {
   try {
     const gameId = await getCurrentGameId();
     if (!gameId) {
-      return json({ ok: true, correct: null, state: await getGameState(null) });
+      return json({ ok: true, correct: null, state: await getGameState(null, await getCurrentRestaurant()) });
     }
     const result = await submitAnswer(gameId, parsed.data.answer);
     return json({
       ok: true,
       correct: result.status === "ok" ? result.correct : null,
-      state: await getGameState(gameId),
+      state: await getGameState(gameId, await getCurrentRestaurant()),
     });
   } catch (err) {
     return handleUnexpected(err, "POST /api/game/answer");

@@ -1,4 +1,4 @@
-import { CalendarDays, CircleHelp, Gift, House, Package, Sandwich, TriangleAlert, Trophy } from "lucide-react";
+import { CalendarDays, CircleHelp, Gift, House, Package, Sandwich, Store, TriangleAlert, Trophy } from "lucide-react";
 import Link from "next/link";
 import { ResetStats } from "@/components/admin/ResetStats";
 import { AutoRefresh } from "@/components/ui/AutoRefresh";
@@ -14,8 +14,14 @@ function rate(m: ModeStats) {
   return m.played > 0 ? Math.round((m.won / m.played) * 100) : 0;
 }
 
-export default async function DashboardPage() {
-  const s = await getStats();
+const shortName = (name: string) => name.replace(/^McDonald's\s*/i, "");
+
+export default async function DashboardPage({ searchParams }: PageProps<"/admin/dashboard">) {
+  const { r } = await searchParams;
+  const wanted = typeof r === "string" && /^[a-z0-9-]{2,30}$/.test(r) ? r : null;
+  let s = await getStats(wanted);
+  if (wanted && !s.restaurants.some((x) => x.key === wanted)) s = await getStats(null);
+  const current = s.restaurants.find((x) => x.key === s.restaurant) ?? null;
   const casettePrizes = s.prizes.filter((p) => p.pool === "casette");
   const bigmac = s.prizes.find((p) => p.pool === "bigmac");
   const maxStock = Math.max(1, ...casettePrizes.map((p) => (p.stock ?? 0) + p.won));
@@ -44,7 +50,7 @@ export default async function DashboardPage() {
       tone: "bg-red-50 text-brand-red",
     },
     {
-      label: "Premi casette rimasti",
+      label: current ? "Premi casette rimasti" : "Premi casette rimasti (tutti)",
       value: s.stockLeft,
       hint: s.stockLeft === 0 ? "Esauriti: le casette sono bloccate" : undefined,
       icon: Package,
@@ -57,7 +63,11 @@ export default async function DashboardPage() {
   if (easy === 0 || medium === 0 || hard === 0) {
     warnings.push("Per \"La sfida Big Mac\" serve almeno una domanda attiva facile, una media e una difficile.");
   }
-  if (s.stockLeft === 0) warnings.push("I premi delle casette sono esauriti: aggiorna le scorte in Premi e scorte.");
+  for (const x of s.restaurants) {
+    if ((!current || current.key === x.key) && x.stockLeft === 0) {
+      warnings.push(`${x.name}: premi delle casette esauriti. Aggiorna le scorte in Premi e scorte.`);
+    }
+  }
 
   return (
     <div className="animate-fade-up space-y-6">
@@ -68,6 +78,67 @@ export default async function DashboardPage() {
           <CalendarDays className="size-4" aria-hidden /> {formatItalianDate(s.date)} · dati cumulativi, aggiornati automaticamente
         </p>
       </div>
+
+      <nav className="flex gap-2 overflow-x-auto pb-1" aria-label="Filtra per ristorante">
+        {[{ key: null as string | null, name: "Tutti i ristoranti" }, ...s.restaurants].map((x) => {
+          const active = (x.key ?? null) === (s.restaurant ?? null);
+          return (
+            <Link
+              key={x.key ?? "all"}
+              href={x.key ? `/admin/dashboard?r=${x.key}` : "/admin/dashboard"}
+              aria-current={active ? "page" : undefined}
+              className={`flex h-11 shrink-0 items-center gap-1.5 rounded-xl px-4 text-sm font-extrabold transition ${
+                active ? "bg-brand-red text-white shadow-sm" : "bg-white text-ink-soft shadow-sm hover:bg-neutral-50"
+              }`}
+            >
+              {x.key ? shortName(x.name) : x.name}
+            </Link>
+          );
+        })}
+      </nav>
+
+      {!current && (
+        <section aria-labelledby="restaurants-title">
+          <h2 id="restaurants-title" className="mb-3 flex items-center gap-2 text-lg font-black">
+            <Store className="size-5 text-brand-red" aria-hidden /> Ristoranti
+          </h2>
+          <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {s.restaurants.map((x) => (
+              <li key={x.key}>
+                <Link
+                  href={`/admin/dashboard?r=${x.key}`}
+                  className="block rounded-2xl border-2 border-transparent bg-white p-4 shadow-sm transition hover:border-brand-yellow"
+                >
+                  <p className="text-xs font-black uppercase tracking-wider text-brand-red">McDonald&apos;s</p>
+                  <p className="text-xl font-black">{shortName(x.name)}</p>
+                  <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <dt className="text-xs font-bold text-neutral-500">Partite</dt>
+                      <dd className="font-black tabular-nums">
+                        {nf.format(x.played)} <span className="text-xs font-bold text-neutral-500">({nf.format(x.todayPlayed)} oggi)</span>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs font-bold text-neutral-500">Premi rimasti</dt>
+                      <dd className={`font-black tabular-nums ${x.stockLeft === 0 ? "text-brand-red" : ""}`}>{nf.format(x.stockLeft)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs font-bold text-neutral-500">🏠 Casette vinte</dt>
+                      <dd className="font-black tabular-nums">{nf.format(x.casetteWon)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs font-bold text-neutral-500">🍔 Big Mac vinti</dt>
+                      <dd className="font-black tabular-nums">{nf.format(x.bigmacWon)}</dd>
+                    </div>
+                  </dl>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {current && <h2 className="text-xl font-black">{current.name}</h2>}
 
       {warnings.length > 0 && (
         <div className="flex gap-3 rounded-2xl border-2 border-brand-yellow bg-brand-yellow-light p-4">

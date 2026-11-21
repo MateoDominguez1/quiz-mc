@@ -8,19 +8,22 @@ import { getSessionSecret, getStaffCredentials, type StaffRole } from "@/lib/env
  * /admin e viceversa. "game" contiene solo l'ID della partita in corso sul
  * dispositivo (ricaricando la pagina la partita continua).
  */
-export type SessionRole = StaffRole | "game";
+export type SessionRole = StaffRole | "game" | "restaurant";
 
 const CONFIG: Record<SessionRole, { cookie: string; audience: string; seconds: number }> = {
   admin: { cookie: "qz_admin", audience: "quiz-admin", seconds: 60 * 60 * 8 },
   // Il dispositivo resta abilitato per tutta la durata dell'iniziativa.
   postazione: { cookie: "qz_station", audience: "quiz-station", seconds: 60 * 60 * 24 * 45 },
   game: { cookie: "qz_game", audience: "quiz-game", seconds: 60 * 60 * 12 },
+  // Ristorante scelto sul dispositivo (premi e partite sono separati per ristorante).
+  restaurant: { cookie: "qz_restaurant", audience: "quiz-restaurant", seconds: 60 * 60 * 24 * 365 },
 };
 
 export const SESSION_COOKIE: Record<SessionRole, string> = {
   admin: CONFIG.admin.cookie,
   postazione: CONFIG.postazione.cookie,
   game: CONFIG.game.cookie,
+  restaurant: CONFIG.restaurant.cookie,
 };
 
 export interface Session {
@@ -55,7 +58,7 @@ export async function verifySession(role: SessionRole, token: string | undefined
     });
     if (payload.role !== role || typeof payload.sub !== "string") return null;
     // Se l'utente del personale cambia nelle variabili d'ambiente, le sessioni decadono.
-    if (role !== "game" && payload.sub !== getStaffCredentials(role).username) return null;
+    if ((role === "admin" || role === "postazione") && payload.sub !== getStaffCredentials(role).username) return null;
     return { role, subject: payload.sub, expiresAt: (payload.exp ?? 0) * 1000 };
   } catch {
     return null;

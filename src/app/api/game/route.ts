@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { SESSION_COOKIE, sessionCookieOptions, signSession } from "@/lib/auth/token";
-import { getCurrentGameId } from "@/lib/game-session";
+import { getCurrentGameId, getCurrentRestaurant } from "@/lib/game-session";
 import { errorJson, guardStaff, handleUnexpected, json, readJson } from "@/lib/http";
 import { NO_QUESTIONS_MESSAGE, NO_STOCK_MESSAGE } from "@/lib/messages";
 import { abandonGame, getGameState, startGame } from "@/lib/services/quiz";
@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
   const { denied } = await guardStaff(req, "postazione", false);
   if (denied) return denied;
   try {
-    return json({ ok: true, state: await getGameState(await getCurrentGameId()) });
+    return json({ ok: true, state: await getGameState(await getCurrentGameId(), await getCurrentRestaurant()) });
   } catch (err) {
     return handleUnexpected(err, "GET /api/game");
   }
@@ -32,17 +32,24 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return errorJson(400, "Gioco non valido");
 
   try {
+    const restaurant = await getCurrentRestaurant();
+    if (!restaurant) {
+      return errorJson(409, "Scegli prima il ristorante di questo dispositivo.", {
+        code: "no_restaurant",
+        state: await getGameState(null, null),
+      });
+    }
     const previous = await getCurrentGameId();
     if (previous) await abandonGame(previous);
 
-    const result = await startGame(parsed.data.mode);
+    const result = await startGame(parsed.data.mode, restaurant);
     if (result.status !== "ok") {
       return errorJson(409, result.status === "no_stock" ? NO_STOCK_MESSAGE : NO_QUESTIONS_MESSAGE, {
         code: result.status,
-        state: await getGameState(null),
+        state: await getGameState(null, await getCurrentRestaurant()),
       });
     }
-    const res = json({ ok: true, state: await getGameState(result.gameId) });
+    const res = json({ ok: true, state: await getGameState(result.gameId, restaurant) });
     res.cookies.set(SESSION_COOKIE.game, await signSession("game", result.gameId), sessionCookieOptions("game"));
     return res;
   } catch (err) {
@@ -57,7 +64,7 @@ export async function DELETE(req: NextRequest) {
   try {
     const gameId = await getCurrentGameId();
     if (gameId) await abandonGame(gameId);
-    const res = json({ ok: true, state: await getGameState(null) });
+    const res = json({ ok: true, state: await getGameState(null, await getCurrentRestaurant()) });
     res.cookies.set(SESSION_COOKIE.game, "", sessionCookieOptions("game", 0));
     return res;
   } catch (err) {

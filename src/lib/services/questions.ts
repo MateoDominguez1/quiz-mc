@@ -158,8 +158,17 @@ export async function getStats(restaurant: string | null = null): Promise<AdminS
   };
 }
 
-/** Azzera le statistiche (elimina le partite; domande, premi e scorte restano). Irreversibile. */
-export async function resetStats(): Promise<{ gamesDeleted: number }> {
-  const r = await callRpc<{ games_deleted: number }>("admin_reset_stats");
-  return { gamesDeleted: Number(r.games_deleted) };
+/**
+ * Azzera le statistiche di un ristorante (o di tutti se restaurant = null).
+ * Con resetStock riporta anche le scorte ai valori iniziali. Irreversibile.
+ */
+export async function resetStats(
+  restaurant: string | null,
+  resetStock: boolean,
+): Promise<{ gamesDeleted: number; stockReset: boolean } | null> {
+  const r = await callRpc<{ games_deleted: number; stock_reset: boolean } | null>("admin_reset_stats", {
+    p_restaurant: restaurant,
+    p_reset_stock: resetStock,
+  });
+  return r ? { gamesDeleted: Number(r.games_deleted), stockReset: Boolean(r.stock_reset) } : null;
 }

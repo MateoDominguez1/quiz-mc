@@ -95,6 +95,13 @@ export function fieldErrors(error: z.ZodError): Record<string, string> {
 export const RESET_CONFIRM_WORD = "AZZERA";
 
 export const resetStatsSchema = z.object({
+  /** null = tutti i ristoranti. */
+  restaurant: z
+    .string()
+    .regex(/^[a-z0-9-]{2,30}$/, { error: "Ristorante non valido" })
+    .nullable()
+    .default(null),
+  resetStock: z.boolean().default(false),
   confirm: z.literal(RESET_CONFIRM_WORD, { error: `Scrivi ${RESET_CONFIRM_WORD} per confermare` }),
 });
 

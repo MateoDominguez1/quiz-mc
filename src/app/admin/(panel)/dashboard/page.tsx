@@ -267,7 +267,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/admin/
         </div>
       </div>
 
-      <ResetStats />
+      <ResetStats restaurants={s.restaurants.map((x) => ({ key: x.key, name: x.name }))} current={s.restaurant} />
     </div>
   );
 }

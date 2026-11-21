@@ -380,6 +380,7 @@ drop function if exists public.cassa_list_redemptions(integer);
 drop function if exists public.admin_create_question(text, text, text, text, text, text, boolean);
 drop function if exists public.admin_update_question(uuid, text, text, text, text, text, text, boolean);
 drop function if exists public.admin_reset_stats(boolean);
+drop function if exists public.admin_reset_stats();
 drop function if exists public.admin_list_prize_settings();
 drop function if exists public.admin_update_prize(text, text, text);
 drop function if exists public.admin_set_prize_image(text, text);
@@ -981,10 +982,13 @@ as $$
   );
 $$;
 
--- Azzeramento delle statistiche: elimina tutte le partite.
--- Domande, premi, foto e scorte restano; resta anche lo storico delle domande
--- uscite, così la rotazione continua senza ripetizioni.
-create or replace function public.admin_reset_stats()
+-- Azzeramento delle statistiche di un ristorante (p_restaurant) o di tutti
+-- (p_restaurant null): elimina le partite. Domande, premi e foto restano;
+-- resta anche lo storico delle domande uscite, così la rotazione continua.
+-- p_reset_stock = true: riporta anche i pezzi disponibili ai valori iniziali
+-- (55 braccialetti, 10 hamburger, 10 nuggets, 10 patatine, 10 coni,
+-- 10 profumatori, 50 gadget).
+create or replace function public.admin_reset_stats(p_restaurant text default null, p_reset_stock boolean default false)
 returns jsonb
 language plpgsql
 volatile
@@ -993,10 +997,29 @@ set search_path = public
 as $$
 declare
   v_games integer;
+  v_stock integer := 0;
 begin
-  delete from public.games;
+  if p_restaurant is not null and not exists (select 1 from public.restaurants where key = p_restaurant) then
+    return null;
+  end if;
+
+  delete from public.games where p_restaurant is null or restaurant_key = p_restaurant;
   get diagnostics v_games = row_count;
-  return jsonb_build_object('games_deleted', v_games);
+
+  if p_reset_stock then
+    insert into public.restaurant_stock (restaurant_key, prize_key, stock)
+    select r.key, d.prize_key, d.stock
+    from public.restaurants r
+    cross join (values
+      ('braccialetto', 55), ('hamburger', 10), ('nuggets', 10), ('patatine', 10),
+      ('cono', 10), ('profumatore', 10), ('gadget', 50)
+    ) as d(prize_key, stock)
+    where p_restaurant is null or r.key = p_restaurant
+    on conflict (restaurant_key, prize_key) do update set stock = excluded.stock, updated_at = now();
+    get diagnostics v_stock = row_count;
+  end if;
+
+  return jsonb_build_object('games_deleted', v_games, 'stock_reset', v_stock > 0);
 end;
 $$;
 
@@ -1145,7 +1168,7 @@ begin
     'public.admin_set_question_active(uuid, boolean)',
     'public.admin_delete_question(uuid)',
     'public.admin_get_stats(date, text)',
-    'public.admin_reset_stats()',
+    'public.admin_reset_stats(text, boolean)',
     'public.admin_list_prizes()',
     'public.admin_update_prize(text, text, text)',
     'public.admin_set_stock(text, text, integer)',

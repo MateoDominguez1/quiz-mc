@@ -7,8 +7,9 @@ import { resetStatsSchema } from "@/lib/validation";
 export const dynamic = "force-dynamic";
 
 /**
- * POST /api/admin/stats/reset  { confirm: "AZZERA" }
- * Solo amministratore. Elimina le partite (domande, premi e scorte restano).
+ * POST /api/admin/stats/reset  { restaurant: string | null, resetStock: boolean, confirm: "AZZERA" }
+ * Solo amministratore. Elimina le partite di un ristorante (o di tutti) e,
+ * se richiesto, ripristina le scorte iniziali. Domande e foto restano.
  * Irreversibile: richiede la parola di conferma.
  */
 export async function POST(req: NextRequest) {
@@ -24,8 +25,10 @@ export async function POST(req: NextRequest) {
     const limit = await checkRateLimit("stats-reset", session.subject, 5, 600);
     if (!limit.allowed) return errorJson(429, "Troppe richieste. Riprova tra qualche minuto.");
 
-    const result = await resetStats();
-    console.info(`[admin] Statistiche azzerate da ${session.subject}`, result);
+    const { restaurant, resetStock } = parsed.data;
+    const result = await resetStats(restaurant, resetStock);
+    if (!result) return errorJson(404, "Ristorante non trovato");
+    console.info(`[admin] Statistiche azzerate da ${session.subject} (${restaurant ?? "tutti"})`, result);
     return json({ ok: true, result });
   } catch (err) {
     return handleUnexpected(err, "POST /api/admin/stats/reset");

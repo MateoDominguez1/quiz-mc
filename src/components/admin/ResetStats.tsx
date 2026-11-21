@@ -7,16 +7,22 @@ import { useToast } from "@/components/admin/Toast";
 import { Spinner } from "@/components/ui/Spinner";
 import { apiFetch } from "@/lib/client/api";
 import { RESET_CONFIRM_WORD } from "@/lib/validation";
+import type { Restaurant } from "@/types/quiz";
+
+const ALL = "__all__";
 
 /**
- * "Zona pericolosa" della dashboard: doppia conferma (apertura della finestra
- * + parola AZZERA da digitare). L'operazione avviene sul server.
+ * "Zona pericolosa" della dashboard: azzera le statistiche di un ristorante
+ * (o di tutti), con doppia conferma (finestra + parola AZZERA da digitare).
+ * Facoltativo: riporta anche le scorte dei premi ai valori iniziali.
  */
-export function ResetStats() {
+export function ResetStats({ restaurants, current }: { restaurants: Restaurant[]; current: string | null }) {
   const router = useRouter();
   const toast = useToast();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [open, setOpen] = useState(false);
+  const [target, setTarget] = useState<string>(current ?? ALL);
+  const [resetStock, setResetStock] = useState(false);
   const [word, setWord] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -27,6 +33,13 @@ export function ResetStats() {
     if (!open && d.open) d.close();
   }, [open]);
 
+  function openDialog() {
+    setTarget(current ?? ALL);
+    setResetStock(false);
+    setWord("");
+    setOpen(true);
+  }
+
   function close() {
     if (loading) return;
     setOpen(false);
@@ -34,17 +47,23 @@ export function ResetStats() {
   }
 
   const confirmed = word.trim().toUpperCase() === RESET_CONFIRM_WORD;
+  const targetName = target === ALL ? "tutti i ristoranti" : (restaurants.find((r) => r.key === target)?.name ?? "");
 
   async function reset() {
     if (!confirmed || loading) return;
     setLoading(true);
-    const res = await apiFetch<{ result: { gamesDeleted: number } }>("/api/admin/stats/reset", {
+    const res = await apiFetch<{ result: { gamesDeleted: number; stockReset: boolean } }>("/api/admin/stats/reset", {
       method: "POST",
-      body: { confirm: RESET_CONFIRM_WORD },
+      body: { restaurant: target === ALL ? null : target, resetStock, confirm: RESET_CONFIRM_WORD },
     });
     setLoading(false);
     if (res.ok && res.data) {
-      toast.show("success", `Statistiche azzerate: ${res.data.result.gamesDeleted} partite eliminate.`);
+      const { gamesDeleted, stockReset } = res.data.result;
+      toast.show(
+        "success",
+        `${targetName.charAt(0).toUpperCase()}${targetName.slice(1)}: ${gamesDeleted} partite eliminate` +
+          (stockReset ? ", scorte ripristinate." : "."),
+      );
       setOpen(false);
       setWord("");
       router.refresh();
@@ -54,18 +73,20 @@ export function ResetStats() {
     }
   }
 
+  const options = [{ key: ALL, name: "Tutti i ristoranti" }, ...restaurants];
+
   return (
     <section className="rounded-3xl border-2 border-red-200 bg-white p-5 sm:p-6" aria-labelledby="danger-title">
       <h2 id="danger-title" className="flex items-center gap-2 text-lg font-black text-brand-red-dark">
         <TriangleAlert className="size-5" aria-hidden /> Zona pericolosa
       </h2>
       <p className="mt-1 text-[15px] text-ink-soft">
-        Azzera partite e vincite. Domande, premi, foto e scorte non vengono toccati (le scorte si modificano in Premi e
-        scorte). L&apos;operazione non può essere annullata.
+        Azzera partite e vincite di un ristorante o di tutti; puoi anche riportare i premi alle scorte iniziali. Domande e
+        foto non vengono toccate. L&apos;operazione non può essere annullata.
       </p>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={openDialog}
         className="mt-4 flex h-12 items-center gap-2 rounded-2xl border-2 border-brand-red px-5 font-black text-brand-red hover:bg-red-50"
       >
         <RotateCcw className="size-5" aria-hidden /> Azzera statistiche
@@ -88,8 +109,47 @@ export function ResetStats() {
             Azzerare le statistiche?
           </h2>
           <p className="mt-1 text-[15px] text-ink-soft">
-            Tutte le partite e le statistiche verranno eliminate. Le domande continuano a ruotare senza ripetersi.
+            Le partite verranno eliminate. Le domande continuano a ruotare senza ripetersi.
           </p>
+
+          <fieldset className="mt-4">
+            <legend className="mb-2 text-sm font-extrabold">Quale ristorante?</legend>
+            <div className="grid grid-cols-2 gap-2">
+              {options.map((o) => (
+                <label
+                  key={o.key}
+                  className={`flex cursor-pointer items-center gap-2 rounded-2xl border-2 px-3 py-2.5 text-sm font-black ${
+                    target === o.key ? "border-brand-red bg-red-50/60" : "border-neutral-200"
+                  } ${o.key === ALL ? "col-span-2" : ""}`}
+                >
+                  <input
+                    type="radio"
+                    name="reset-target"
+                    value={o.key}
+                    checked={target === o.key}
+                    onChange={() => setTarget(o.key)}
+                    className="size-4 accent-[#c8102e]"
+                  />
+                  {o.key === ALL ? o.name : o.name.replace(/^McDonald's\s*/i, "")}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+
+          <label className="mt-3 flex cursor-pointer gap-3 rounded-2xl border-2 border-neutral-200 p-3">
+            <input
+              type="checkbox"
+              checked={resetStock}
+              onChange={(e) => setResetStock(e.target.checked)}
+              className="mt-1 size-5 accent-[#c8102e]"
+            />
+            <span>
+              <span className="block font-black">Ripristina anche le scorte iniziali</span>
+              <span className="block text-sm text-ink-soft">
+                55 braccialetti, 10 hamburger, 10 nuggets, 10 patatine, 10 coni, 10 profumatori, 50 gadget.
+              </span>
+            </span>
+          </label>
 
           <label htmlFor="reset-word" className="mt-4 block text-sm font-extrabold">
             Per confermare scrivi <span className="font-mono text-brand-red">{RESET_CONFIRM_WORD}</span>
@@ -120,7 +180,7 @@ export function ResetStats() {
               className="flex h-12 items-center justify-center gap-2 rounded-2xl bg-brand-red px-5 font-black text-white disabled:opacity-40"
             >
               {loading && <Spinner />}
-              Azzera definitivamente
+              Azzera {target === ALL ? "tutto" : targetName.replace(/^McDonald's\s*/i, "")}
             </button>
           </div>
         </div>

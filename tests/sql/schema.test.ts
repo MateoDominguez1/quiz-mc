@@ -500,7 +500,7 @@ describe("statistiche", () => {
     await house(gid);
     await rpc("public.admin_set_prize_image('cono', 'cono.webp')");
 
-    expect(await rpc("public.admin_reset_stats()")).toEqual({ games_deleted: 1 });
+    expect(await rpc("public.admin_reset_stats(null, false)")).toEqual({ games_deleted: 1, stock_reset: false });
     const s = await rpc<{ casette: { played: number }; stock_left: number; total_questions: number }>(
       "public.admin_get_stats(null, 'merlata')",
     );
@@ -512,6 +512,31 @@ describe("statistiche", () => {
     // La domanda appena uscita non viene riproposta subito.
     const next = await start("casette");
     expect((await state(next)).question?.question_text).not.toBe(first);
+  });
+});
+
+describe("azzeramento per ristorante", () => {
+  it("azzera solo il ristorante scelto e, se richiesto, ne ripristina le scorte", async () => {
+    await createQuestion("F", 0);
+    for (const r of ["rho", "bonola"]) {
+      const g = await start("casette", "2026-11-15", r);
+      await answer(g, "B");
+      await house(g);
+    }
+    await db.query("update restaurant_stock set stock = 2 where prize_key = 'cono' and restaurant_key in ('rho', 'bonola')");
+
+    expect(await rpc("public.admin_reset_stats('rho', true)")).toEqual({ games_deleted: 1, stock_reset: true });
+    const rho = await rpc<{ casette: { played: number } }>("public.admin_get_stats(null, 'rho')");
+    const bonola = await rpc<{ casette: { played: number } }>("public.admin_get_stats(null, 'bonola')");
+    expect(rho.casette.played).toBe(0);
+    expect(bonola.casette.played).toBe(1);
+    expect(await totalStock("rho")).toBe(155);
+    expect(await stockOf("cono", "bonola")).toBe(2);
+
+    // Solo statistiche: le scorte restano.
+    expect(await rpc("public.admin_reset_stats('bonola', false)")).toEqual({ games_deleted: 1, stock_reset: false });
+    expect(await stockOf("cono", "bonola")).toBe(2);
+    expect(await rpc("public.admin_reset_stats('napoli', false)")).toBeNull();
   });
 });
 
@@ -566,7 +591,7 @@ describe("sicurezza", () => {
       "select public.admin_get_stats(null, null)",
       "select * from public.restaurant_stock",
       "select public.admin_set_stock('rho', 'cono', 99)",
-      "select public.admin_reset_stats()",
+      "select public.admin_reset_stats(null, false)",
     ]) {
       await expect(db.query(sql), sql).rejects.toThrow();
     }

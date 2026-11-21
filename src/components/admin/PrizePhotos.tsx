@@ -7,7 +7,7 @@ import { useToast } from "@/components/admin/Toast";
 import { PrizeImage } from "@/components/quiz/PrizeImage";
 import { Spinner } from "@/components/ui/Spinner";
 import { apiFetch } from "@/lib/client/api";
-import { PRIZE_INFO, winMessageFor, type PrizeSetting, type PrizeType } from "@/types/quiz";
+import { winMessageFor, type PrizeSetting } from "@/types/quiz";
 
 const MAX_SIDE = 900;
 
@@ -48,8 +48,12 @@ function PrizeCard({ prize }: { prize: PrizeSetting }) {
   const [savedLabel, setSavedLabel] = useState(prize.label);
   const [message, setMessage] = useState(prize.winMessage ?? "");
   const [savedMessage, setSavedMessage] = useState(prize.winMessage ?? "");
+  const hasStock = prize.pool === "casette";
+  const [stock, setStock] = useState(String(prize.stock ?? 0));
+  const [savedStock, setSavedStock] = useState(String(prize.stock ?? 0));
   const [saving, setSaving] = useState(false);
-  const dirty = label.trim() !== savedLabel || message.trim() !== savedMessage;
+  const dirty =
+    label.trim() !== savedLabel || message.trim() !== savedMessage || (hasStock && stock !== savedStock);
 
   async function saveTexts(e: FormEvent) {
     e.preventDefault();
@@ -58,10 +62,15 @@ function PrizeCard({ prize }: { prize: PrizeSetting }) {
       toast.show("error", "Inserisci il nome del premio.");
       return;
     }
+    const stockValue = hasStock ? Number(stock) : null;
+    if (hasStock && (!/^\d{1,5}$/.test(stock) || !Number.isInteger(stockValue))) {
+      toast.show("error", "Pezzi disponibili: inserisci un numero intero da 0 a 99999.");
+      return;
+    }
     setSaving(true);
-    const res = await apiFetch(`/api/admin/prizes/${prize.type}`, {
+    const res = await apiFetch(`/api/admin/prizes/${prize.key}`, {
       method: "PATCH",
-      body: { label: label.trim(), winMessage: message.trim() || null },
+      body: { label: label.trim(), winMessage: message.trim() || null, stock: stockValue },
     });
     setSaving(false);
     if (res.ok) {
@@ -69,6 +78,8 @@ function PrizeCard({ prize }: { prize: PrizeSetting }) {
       setSavedLabel(label.trim());
       setMessage(message.trim());
       setSavedMessage(message.trim());
+      setStock(String(stockValue ?? 0));
+      setSavedStock(String(stockValue ?? 0));
       toast.show("success", `Premio "${label.trim()}" aggiornato.`);
       router.refresh();
     } else {
@@ -87,8 +98,8 @@ function PrizeCard({ prize }: { prize: PrizeSetting }) {
     try {
       const blob = await optimizeImage(file);
       const form = new FormData();
-      form.append("file", blob, `${prize.type}.${blob.type === "image/webp" ? "webp" : "jpg"}`);
-      const res = await fetch(`/api/admin/prizes/${prize.type}/image`, { method: "POST", body: form, credentials: "same-origin" });
+      form.append("file", blob, `${prize.key}.${blob.type === "image/webp" ? "webp" : "jpg"}`);
+      const res = await fetch(`/api/admin/prizes/${prize.key}/image`, { method: "POST", body: form, credentials: "same-origin" });
       const data = (await res.json().catch(() => null)) as { ok?: boolean; imageUrl?: string; error?: string } | null;
       if (res.ok && data?.ok) {
         setImageUrl(data.imageUrl ?? null);
@@ -106,23 +117,28 @@ function PrizeCard({ prize }: { prize: PrizeSetting }) {
     }
   }
 
-  const info = PRIZE_INFO[prize.type as PrizeType];
   return (
     <li className="flex flex-col items-center rounded-3xl bg-white p-5 text-center shadow-sm">
-      <PrizeImage type={prize.type} label={savedLabel} imageUrl={imageUrl} className="size-44" />
+      <PrizeImage prizeKey={prize.key} label={savedLabel} imageUrl={imageUrl} className="size-44" />
       <p className="mt-4 text-xl font-black">{savedLabel}</p>
-      <p className="text-sm font-bold text-ink-soft">{info.ages}</p>
+      {hasStock ? (
+        <p className={`text-sm font-bold ${savedStock === "0" ? "text-brand-red" : "text-ink-soft"}`}>
+          {savedStock === "0" ? "Esaurito: non viene più estratto" : `${savedStock} pezzi disponibili`}
+        </p>
+      ) : (
+        <p className="text-sm font-bold text-ink-soft">🍔 Premio della sfida Big Mac</p>
+      )}
       <p className="mt-1 text-xs font-semibold text-neutral-500">{imageUrl ? "Foto caricata" : "Nessuna foto: viene mostrata un'icona"}</p>
       <input
         ref={inputRef}
         type="file"
         accept="image/jpeg,image/png,image/webp"
         className="sr-only"
-        id={`file-${prize.type}`}
+        id={`file-${prize.key}`}
         onChange={(e) => onFile(e.target.files?.[0])}
       />
       <label
-        htmlFor={`file-${prize.type}`}
+        htmlFor={`file-${prize.key}`}
         className={`mt-4 flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-brand-red font-black text-white ${uploading ? "pointer-events-none opacity-70" : ""}`}
       >
         {uploading ? <Spinner /> : <ImageUp className="size-5" aria-hidden />}
@@ -130,12 +146,32 @@ function PrizeCard({ prize }: { prize: PrizeSetting }) {
       </label>
 
       <form onSubmit={saveTexts} noValidate className="mt-5 w-full space-y-3 border-t border-neutral-100 pt-4 text-left">
+        {hasStock && (
+          <div className="space-y-1.5">
+            <label htmlFor={`stock-${prize.key}`} className="block text-sm font-extrabold">
+              Pezzi disponibili
+            </label>
+            <input
+              id={`stock-${prize.key}`}
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={stock}
+              maxLength={5}
+              onChange={(e) => setStock(e.target.value.replace(/\D/g, "").slice(0, 5))}
+              className="h-12 w-full rounded-2xl border-2 border-neutral-200 bg-white px-4 text-lg font-black tabular-nums outline-none focus:border-brand-yellow-dark focus:ring-4 focus:ring-brand-yellow/30"
+            />
+            <p className="text-xs font-semibold text-neutral-500">
+              Scende da solo a ogni vincita. Più pezzi = più probabilità di essere estratto.
+            </p>
+          </div>
+        )}
         <div className="space-y-1.5">
-          <label htmlFor={`label-${prize.type}`} className="block text-sm font-extrabold">
+          <label htmlFor={`label-${prize.key}`} className="block text-sm font-extrabold">
             Nome del premio
           </label>
           <input
-            id={`label-${prize.type}`}
+            id={`label-${prize.key}`}
             value={label}
             maxLength={40}
             onChange={(e) => setLabel(e.target.value)}
@@ -143,16 +179,16 @@ function PrizeCard({ prize }: { prize: PrizeSetting }) {
           />
         </div>
         <div className="space-y-1.5">
-          <label htmlFor={`msg-${prize.type}`} className="block text-sm font-extrabold">
+          <label htmlFor={`msg-${prize.key}`} className="block text-sm font-extrabold">
             Messaggio per il vincitore <span className="font-semibold text-neutral-500">(facoltativo)</span>
           </label>
           <textarea
-            id={`msg-${prize.type}`}
+            id={`msg-${prize.key}`}
             value={message}
             maxLength={120}
             rows={2}
             onChange={(e) => setMessage(e.target.value)}
-            placeholder={winMessageFor(prize.type, label || savedLabel, null)}
+            placeholder={winMessageFor(prize.key, label || savedLabel, null)}
             className="w-full resize-none rounded-2xl border-2 border-neutral-200 bg-white px-4 py-2.5 font-semibold outline-none focus:border-brand-yellow-dark focus:ring-4 focus:ring-brand-yellow/30"
           />
           <p className="text-xs font-semibold text-neutral-500">Se lo lasci vuoto viene mostrato il testo suggerito.</p>
@@ -163,7 +199,7 @@ function PrizeCard({ prize }: { prize: PrizeSetting }) {
           className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-ink font-black text-white disabled:bg-neutral-200 disabled:text-neutral-500"
         >
           {saving ? <Spinner /> : <Save className="size-5" aria-hidden />}
-          {saving ? "Salvataggio…" : dirty ? "Salva nome e messaggio" : "Salvato"}
+          {saving ? "Salvataggio…" : dirty ? "Salva modifiche" : "Salvato"}
         </button>
       </form>
     </li>
@@ -174,7 +210,7 @@ export function PrizePhotos({ prizes }: { prizes: PrizeSetting[] }) {
   return (
     <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {prizes.map((p) => (
-        <PrizeCard key={p.type} prize={p} />
+        <PrizeCard key={p.key} prize={p} />
       ))}
     </ul>
   );

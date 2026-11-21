@@ -8,9 +8,10 @@ export default async function PrizesPage() {
   return (
     <div className="animate-fade-up space-y-5">
       <div>
-        <h1 className="text-2xl font-black text-ink sm:text-3xl">Premi</h1>
+        <h1 className="text-2xl font-black text-ink sm:text-3xl">Premi e scorte</h1>
         <p className="font-semibold text-ink-soft">
-          Il premio viene assegnato automaticamente in base alla fascia d&apos;età. Puoi cambiare nome, messaggio e foto di ogni premio; le foto vengono ridimensionate per gli smartphone
+          Dopo la scelta della casetta il premio viene estratto a caso tra quelli ancora disponibili, in proporzione ai pezzi
+          rimasti. Puoi cambiare nome, messaggio, foto e pezzi disponibili di ogni premio; le foto vengono ridimensionate
           prima del caricamento.
         </p>
       </div>

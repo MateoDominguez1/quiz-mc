@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ANSWER_LETTERS, PRIZE_TYPES } from "@/types/quiz";
+import { ANSWER_LETTERS, GAME_MODES, HOUSE_KEYS, PRIZE_KEYS } from "@/types/quiz";
 
 const requiredText = (label: string, max: number) =>
   z
@@ -20,6 +20,9 @@ export const questionInputSchema = z
     answerC: requiredText("Risposta C", 200),
     answerD: requiredText("Risposta D", 200),
     correctAnswer: answerLetterSchema,
+    difficulty: z.union([z.literal(0), z.literal(1), z.literal(2)], {
+      error: "Scegli la difficoltà (facile, media o difficile)",
+    }),
     isActive: z.boolean().default(true),
   })
   .superRefine((value, ctx) => {
@@ -39,37 +42,20 @@ export const statusInputSchema = z.object({
   isActive: z.boolean({ error: "Stato non valido" }),
 });
 
-/** La domanda è nota al server (sessione del partecipante): si invia solo la lettera. */
+/** La domanda è nota al server (partita in corso): si invia solo la lettera. */
 export const answerSubmissionSchema = z.object({
   answer: answerLetterSchema,
 });
 
-export const MIN_AGE = 0;
-export const MAX_AGE = 120;
-const AGE_ERROR = `Inserisci un'età valida (numero intero da ${MIN_AGE} a ${MAX_AGE})`;
-
-/** Età: solo numeri interi, niente negativi, decimali o testo. Accetta "12" o 12. */
-export const ageSchema = z
-  .union([z.number(), z.string().trim().regex(/^\d{1,3}$/, { error: AGE_ERROR }).transform(Number)], {
-    error: AGE_ERROR,
-  })
-  .pipe(z.number().int({ error: AGE_ERROR }).min(MIN_AGE, { error: AGE_ERROR }).max(MAX_AGE, { error: AGE_ERROR }));
-
-export const entrySchema = z.object({
-  token: z.string().regex(/^[A-Za-z0-9_-]{43}$/, { error: "Codice non valido" }),
-  age: ageSchema,
+export const startGameSchema = z.object({
+  mode: z.enum(GAME_MODES, { error: "Gioco non valido" }),
 });
 
-/** Codice premio come digitato in cassa (la normalizzazione avviene nel DB). */
-export const prizeCodeSchema = z.object({
-  code: z
-    .string({ error: "Inserisci il codice del premio" })
-    .trim()
-    .min(1, { error: "Inserisci il codice del premio" })
-    .max(20, { error: "Codice non valido. Verifica il codice inserito." }),
+export const houseSchema = z.object({
+  house: z.enum(HOUSE_KEYS, { error: "Casetta non valida" }),
 });
 
-export const prizeTypeSchema = z.enum(PRIZE_TYPES);
+export const prizeKeySchema = z.enum(PRIZE_KEYS);
 
 export const loginSchema = z.object({
   username: z.string().trim().min(1, { error: "Inserisci il nome utente" }).max(100),
@@ -92,7 +78,6 @@ export function fieldErrors(error: z.ZodError): Record<string, string> {
 export const RESET_CONFIRM_WORD = "AZZERA";
 
 export const resetStatsSchema = z.object({
-  mode: z.enum(["all", "keep_pending"], { error: "Scegli cosa azzerare" }),
   confirm: z.literal(RESET_CONFIRM_WORD, { error: `Scrivi ${RESET_CONFIRM_WORD} per confermare` }),
 });
 
@@ -109,4 +94,13 @@ export const prizeUpdateSchema = z.object({
     .nullable()
     .optional()
     .transform((v) => (v ? v : null)),
+  /** Pezzi disponibili (solo premi delle casette). */
+  stock: z
+    .number({ error: "Pezzi disponibili: inserisci un numero" })
+    .int({ error: "Pezzi disponibili: numero intero" })
+    .min(0, { error: "Pezzi disponibili: minimo 0" })
+    .max(99999, { error: "Pezzi disponibili: massimo 99999" })
+    .nullable()
+    .optional()
+    .transform((v) => (v === undefined ? null : v)),
 });

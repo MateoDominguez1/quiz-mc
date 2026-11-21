@@ -2,7 +2,7 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import { callRpc } from "@/lib/supabase/server";
 import { prizeImageUrl, removePrizeImage, uploadPrizeImage } from "@/lib/supabase/storage";
-import type { PrizeSetting, PrizeType } from "@/types/quiz";
+import type { PrizeKey, PrizePool, PrizeSetting } from "@/types/quiz";
 
 export const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
 
@@ -31,28 +31,36 @@ export function detectImageType(bytes: Uint8Array): { type: string; ext: string 
 
 export async function listPrizeSettings(): Promise<PrizeSetting[]> {
   const rows = await callRpc<
-    { prize_type: PrizeType; label: string; win_message: string | null; image_path: string | null; updated_at: string }[]
-  >(
-    "admin_list_prize_settings",
-  );
+    {
+      key: PrizeKey;
+      pool: PrizePool;
+      label: string;
+      win_message: string | null;
+      image_path: string | null;
+      stock: number | null;
+      updated_at: string;
+    }[]
+  >("admin_list_prizes");
   return rows.map((r) => ({
-    type: r.prize_type,
+    key: r.key,
+    pool: r.pool,
     label: r.label,
     winMessage: r.win_message,
     imageUrl: prizeImageUrl(r.image_path),
+    stock: r.stock === null ? null : Number(r.stock),
     updatedAt: r.updated_at,
   }));
 }
 
 /** Carica la nuova foto, aggiorna il DB e rimuove quella precedente. */
-export async function replacePrizeImage(prizeType: PrizeType, bytes: Uint8Array): Promise<string | null> {
+export async function replacePrizeImage(key: PrizeKey, bytes: Uint8Array): Promise<string | null> {
   const detected = detectImageType(bytes);
   if (!detected) throw new Error("Formato non supportato");
-  // Nome nuovo a ogni caricamento: evita problemi di cache sui telefoni.
-  const path = `${prizeType}-${Date.now()}-${randomBytes(4).toString("hex")}.${detected.ext}`;
+  // Nome nuovo a ogni caricamento: evita problemi di cache sui dispositivi.
+  const path = `${key}-${Date.now()}-${randomBytes(4).toString("hex")}.${detected.ext}`;
   await uploadPrizeImage(path, bytes, detected.type);
   const res = await callRpc<{ previous_path: string | null } | null>("admin_set_prize_image", {
-    p_prize_type: prizeType,
+    p_key: key,
     p_image_path: path,
   });
   if (res?.previous_path) {
@@ -61,12 +69,21 @@ export async function replacePrizeImage(prizeType: PrizeType, bytes: Uint8Array)
   return prizeImageUrl(path);
 }
 
-/** Modifica nome e messaggio di vittoria (null/vuoto = messaggio predefinito). */
-export async function updatePrize(prizeType: PrizeType, label: string, winMessage: string | null): Promise<boolean> {
+/**
+ * Modifica nome, messaggio di vittoria (null/vuoto = predefinito) e pezzi
+ * disponibili (solo casette; null = invariati).
+ */
+export async function updatePrize(
+  key: PrizeKey,
+  label: string,
+  winMessage: string | null,
+  stock: number | null,
+): Promise<boolean> {
   const row = await callRpc<unknown | null>("admin_update_prize", {
-    p_prize_type: prizeType,
+    p_key: key,
     p_label: label,
     p_win_message: winMessage,
+    p_stock: stock,
   });
   return row !== null;
 }

@@ -6,7 +6,7 @@ import { useRef, useState, type FormEvent } from "react";
 import { Spinner } from "@/components/ui/Spinner";
 import { apiFetch } from "@/lib/client/api";
 
-export function LoginForm({ area = "admin" }: { area?: "admin" | "cassa" }) {
+export function LoginForm({ area = "admin" }: { area?: "admin" | "postazione" }) {
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -30,7 +30,7 @@ export function LoginForm({ area = "admin" }: { area?: "admin" | "cassa" }) {
       body: { username: username.trim(), password },
     });
     if (res.ok) {
-      router.replace(`/${area}/dashboard`);
+      router.replace(area === "admin" ? "/admin/dashboard" : "/");
       router.refresh();
       return; // resta in caricamento fino al cambio pagina
     }

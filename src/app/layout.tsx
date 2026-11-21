@@ -11,7 +11,7 @@ const nunito = Nunito({
 
 export const metadata: Metadata = {
   title: "Il Quiz",
-  description: "Rispondi alla domanda e vinci un premio!",
+  description: "Le casette della fortuna & la sfida Big Mac",
   applicationName: "Il Quiz",
   appleWebApp: {
     capable: true,

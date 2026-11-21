@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 export default async function AdminPanelLayout({ children }: LayoutProps<"/admin">) {
   const session = await requireStaffPage("admin");
   return (
-    <PanelShell variant="admin" username={session.subject}>
+    <PanelShell username={session.subject}>
       {children}
     </PanelShell>
   );

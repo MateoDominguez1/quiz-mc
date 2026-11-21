@@ -46,7 +46,7 @@ export function getSupabaseEnv() {
   };
 }
 
-/** Segreto unico per firmare tutte le sessioni (admin, cassa, partecipante). */
+/** Segreto unico per firmare tutte le sessioni (admin, postazione, partita). */
 export function getSessionSecret(): string {
   const secret = required("ADMIN_SESSION_SECRET", process.env.ADMIN_SESSION_SECRET);
   if (secret.length < 32) {
@@ -55,21 +55,26 @@ export function getSessionSecret(): string {
   return secret;
 }
 
-export type StaffRole = "admin" | "cassa";
+/** admin = pannello /admin; postazione = il dispositivo su cui giocano i clienti. */
+export type StaffRole = "admin" | "postazione";
 
-/** Credenziali del personale: ADMIN_USERNAME/ADMIN_PASSWORD e CASSA_USERNAME/CASSA_PASSWORD. */
+/**
+ * Credenziali del personale: ADMIN_USERNAME/ADMIN_PASSWORD e
+ * POSTAZIONE_USERNAME/POSTAZIONE_PASSWORD. Per la postazione, se non
+ * impostate, valgono ancora le vecchie CASSA_USERNAME/CASSA_PASSWORD.
+ */
 export function getStaffCredentials(role: StaffRole) {
-  const prefix = role === "admin" ? "ADMIN" : "CASSA";
+  if (role === "admin") {
+    return {
+      username: required("ADMIN_USERNAME", process.env.ADMIN_USERNAME),
+      password: required("ADMIN_PASSWORD", process.env.ADMIN_PASSWORD),
+    };
+  }
+  const pick = (name: string) => process.env[`POSTAZIONE_${name}`]?.trim() || process.env[`CASSA_${name}`];
   return {
-    username: required(`${prefix}_USERNAME`, process.env[`${prefix}_USERNAME`]),
-    password: required(`${prefix}_PASSWORD`, process.env[`${prefix}_PASSWORD`]),
+    username: required("POSTAZIONE_USERNAME", pick("USERNAME")),
+    password: required("POSTAZIONE_PASSWORD", pick("PASSWORD")),
   };
-}
-
-/** Durata di validità di un QR non ancora utilizzato (minuti). */
-export function getEntryTtlMinutes(): number {
-  const n = Number(process.env.QR_VALIDITY_MINUTES);
-  return Number.isInteger(n) && n >= 1 && n <= 24 * 60 ? n : 60;
 }
 
 /** Sale per l'hash degli IP nelle chiavi di rate limiting (mai IP in chiaro nel DB). */

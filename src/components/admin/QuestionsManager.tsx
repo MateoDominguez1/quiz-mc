@@ -9,7 +9,7 @@ import { useToast } from "@/components/admin/Toast";
 import { Spinner } from "@/components/ui/Spinner";
 import { apiFetch } from "@/lib/client/api";
 import { formatItalianDate, formatItalianDateTime } from "@/lib/date";
-import { ANSWER_LETTERS, type AdminQuestion } from "@/types/quiz";
+import { ANSWER_LETTERS, DIFFICULTIES, DIFFICULTY_INFO, type AdminQuestion, type Difficulty } from "@/types/quiz";
 
 type Filter = "all" | "active" | "inactive";
 
@@ -18,6 +18,15 @@ const FILTERS: { value: Filter; label: string }[] = [
   { value: "active", label: "Attive" },
   { value: "inactive", label: "Disattivate" },
 ];
+
+function DifficultyBadge({ d }: { d: Difficulty }) {
+  const info = DIFFICULTY_INFO[d];
+  return (
+    <span className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-black ${info.badge}`}>
+      {info.emoji} {info.label}
+    </span>
+  );
+}
 
 function answerOf(q: AdminQuestion, l: string) {
   return q[`answer${l}` as "answerA"];
@@ -64,6 +73,7 @@ export function QuestionsManager({ questions, today }: { questions: AdminQuestio
   const [items, setItems] = useState(questions);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
+  const [level, setLevel] = useState<Difficulty | "all">("all");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [toDelete, setToDelete] = useState<AdminQuestion | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -80,12 +90,13 @@ export function QuestionsManager({ questions, today }: { questions: AdminQuestio
     return items.filter((item) => {
       if (filter === "active" && !item.isActive) return false;
       if (filter === "inactive" && item.isActive) return false;
+      if (level !== "all" && item.difficulty !== level) return false;
       if (!q) return true;
       return [item.questionText, item.answerA, item.answerB, item.answerC, item.answerD].some((t) =>
         t.toLocaleLowerCase("it-IT").includes(q),
       );
     });
-  }, [items, query, filter]);
+  }, [items, query, filter, level]);
 
   async function toggle(q: AdminQuestion) {
     if (busyId) return;
@@ -174,6 +185,27 @@ export function QuestionsManager({ questions, today }: { questions: AdminQuestio
         </div>
       </div>
 
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Filtra per difficoltà">
+        {(["all", ...DIFFICULTIES] as const).map((d) => {
+          const active = level === d;
+          const n = d === "all" ? items.length : items.filter((i) => i.difficulty === d).length;
+          return (
+            <button
+              key={String(d)}
+              type="button"
+              aria-pressed={active}
+              onClick={() => setLevel(d)}
+              className={`h-10 rounded-xl px-3 text-sm font-extrabold transition ${
+                active ? "bg-ink text-white" : "bg-white text-ink-soft shadow-sm hover:bg-neutral-100"
+              }`}
+            >
+              {d === "all" ? "Tutte le difficoltà" : `${DIFFICULTY_INFO[d].emoji} ${DIFFICULTY_INFO[d].label}`}{" "}
+              <span className="tabular-nums opacity-70">({n})</span>
+            </button>
+          );
+        })}
+      </div>
+
       {items.length === 0 ? (
         <div className="rounded-3xl bg-white p-8 text-center shadow-sm">
           <p className="text-lg font-black">Nessuna domanda inserita</p>
@@ -196,6 +228,7 @@ export function QuestionsManager({ questions, today }: { questions: AdminQuestio
             {visible.map((q) => (
               <li key={q.id} className="rounded-3xl bg-white p-4 shadow-sm">
                 <div className="mb-2 flex flex-wrap items-center gap-2">
+                  <DifficultyBadge d={q.difficulty} />
                   {q.lastUsedDate === today && (
                     <span className="rounded-full bg-brand-yellow px-2.5 py-0.5 text-xs font-black text-ink">Usata oggi</span>
                   )}
@@ -251,6 +284,7 @@ export function QuestionsManager({ questions, today }: { questions: AdminQuestio
               <thead className="bg-neutral-50 text-xs font-black uppercase tracking-wider text-neutral-500">
                 <tr>
                   <th className="px-5 py-3">Domanda</th>
+                  <th className="px-3 py-3">Difficoltà</th>
                   <th className="px-3 py-3">Corretta</th>
                   <th className="px-3 py-3">Stato</th>
                   <th className="px-3 py-3">Creata il</th>
@@ -270,6 +304,9 @@ export function QuestionsManager({ questions, today }: { questions: AdminQuestio
                       <p className="mt-1 line-clamp-1 text-sm text-ink-soft">
                         {ANSWER_LETTERS.map((l) => `${l}. ${answerOf(q, l)}`).join("  ·  ")}
                       </p>
+                    </td>
+                    <td className="px-3 py-4">
+                      <DifficultyBadge d={q.difficulty} />
                     </td>
                     <td className="px-3 py-4">
                       <span className="inline-grid size-9 place-items-center rounded-lg bg-emerald-100 font-black text-emerald-800">
@@ -312,8 +349,8 @@ export function QuestionsManager({ questions, today }: { questions: AdminQuestio
         title="Eliminare la domanda?"
         description={
           toDelete?.lastUsedDate === today
-            ? "Questa domanda è stata assegnata oggi: chi non ha ancora risposto non potrà più farlo. Se vuoi solo smettere di proporla, disattivala. L'operazione non può essere annullata."
-            : "La domanda verrà eliminata definitivamente (partecipanti e premi già registrati restano nelle statistiche). L'operazione non può essere annullata."
+            ? "Questa domanda è stata usata oggi: se è in corso una partita con questa domanda, verrà annullata. Se vuoi solo smettere di proporla, disattivala. L'operazione non può essere annullata."
+            : "La domanda verrà eliminata definitivamente (le partite già giocate restano nelle statistiche). L'operazione non può essere annullata."
         }
         confirmLabel="Elimina"
         loading={deleting}

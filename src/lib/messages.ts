@@ -1,3 +1,4 @@
 /** Messaggi condivisi tra server e interfaccia. */
-export const INVALID_ENTRY_MESSAGE = "Questo codice è già stato utilizzato o non è più valido.";
-export const NO_SESSION_MESSAGE = "Per partecipare chiedi alla cassa il tuo QR code.";
+export const NO_STATION_MESSAGE = "Questo dispositivo non è abilitato. Accedi di nuovo alla postazione.";
+export const NO_QUESTIONS_MESSAGE = "Al momento non ci sono domande disponibili per questo gioco.";
+export const NO_STOCK_MESSAGE = "I premi delle casette sono esauriti.";

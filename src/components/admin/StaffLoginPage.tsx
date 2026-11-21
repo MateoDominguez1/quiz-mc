@@ -5,18 +5,22 @@ import { getSession } from "@/lib/auth/session";
 
 const TEXT = {
   admin: { label: "Amministrazione", title: "Area amministratore", subtitle: "Accedi per gestire domande, premi e statistiche." },
-  cassa: { label: "Cassa", title: "Accesso cassa", subtitle: "Riservato al personale autorizzato." },
+  postazione: {
+    label: "Postazione quiz",
+    title: "Abilita questo dispositivo",
+    subtitle: "Accesso riservato al personale. Dopo l'accesso il dispositivo resta pronto per i clienti.",
+  },
 };
 
-/** Schermata di login condivisa da /admin e /cassa. */
-export async function StaffLoginPage({ area }: { area: "admin" | "cassa" }) {
+/** Schermata di login condivisa da /admin e /postazione. */
+export async function StaffLoginPage({ area }: { area: "admin" | "postazione" }) {
   let session = null;
   try {
     session = await getSession(area);
   } catch {
     session = null;
   }
-  if (session) redirect(`/${area}/dashboard`);
+  if (session) redirect(area === "admin" ? "/admin/dashboard" : "/");
   const t = TEXT[area];
 
   return (

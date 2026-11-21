@@ -1,17 +1,6 @@
 "use client";
 
-import {
-  ExternalLink,
-  Gift,
-  History,
-  LayoutDashboard,
-  ListChecks,
-  LogOut,
-  PlusCircle,
-  QrCode,
-  TicketCheck,
-  type LucideIcon,
-} from "lucide-react";
+import { ExternalLink, Gift, LayoutDashboard, ListChecks, LogOut, PlusCircle, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
@@ -29,53 +18,34 @@ interface NavItem {
   match?: (pathname: string) => boolean;
 }
 
-const VARIANTS: Record<"admin" | "cassa", { title: string; nav: NavItem[] }> = {
-  admin: {
-    title: "Amministrazione",
-    nav: [
-      { href: "/admin/dashboard", label: "Dashboard", short: "Dashboard", icon: LayoutDashboard },
-      {
-        href: "/admin/domande",
-        label: "Gestione delle domande",
-        short: "Domande",
-        icon: ListChecks,
-        match: (p) => p === "/admin/domande" || (p.startsWith("/admin/domande/") && !p.endsWith("/nuova")),
-      },
-      { href: "/admin/domande/nuova", label: "Nuova domanda", short: "Nuova", icon: PlusCircle },
-      { href: "/admin/premi", label: "Premi", short: "Premi", icon: Gift },
-    ],
-  },
-  cassa: {
-    title: "Cassa",
-    nav: [
-      { href: "/cassa/dashboard", label: "Inizio", short: "Inizio", icon: LayoutDashboard },
-      { href: "/cassa/nuova", label: "Nuova partecipazione", short: "Nuovo QR", icon: QrCode },
-      { href: "/cassa/riscatta", label: "Riscatta un premio", short: "Riscatta", icon: TicketCheck },
-      { href: "/cassa/storico", label: "Storico riscossioni", short: "Storico", icon: History },
-    ],
-  },
-};
+const TITLE = "Amministrazione";
 
-export function PanelShell({
-  variant,
-  username,
-  children,
-}: {
-  variant: "admin" | "cassa";
-  username: string;
-  children: ReactNode;
-}) {
+const NAV: NavItem[] = [
+  { href: "/admin/dashboard", label: "Dashboard", short: "Dashboard", icon: LayoutDashboard },
+  {
+    href: "/admin/domande",
+    label: "Gestione delle domande",
+    short: "Domande",
+    icon: ListChecks,
+    match: (p) => p === "/admin/domande" || (p.startsWith("/admin/domande/") && !p.endsWith("/nuova")),
+  },
+  { href: "/admin/domande/nuova", label: "Nuova domanda", short: "Nuova", icon: PlusCircle },
+  { href: "/admin/premi", label: "Premi e scorte", short: "Premi", icon: Gift },
+];
+
+export function PanelShell({ username, children }: { username: string; children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
-  const { title, nav } = VARIANTS[variant];
+  const title = TITLE;
+  const nav = NAV;
   const isActive = (item: NavItem) => (item.match ? item.match(pathname) : pathname === item.href);
 
   async function logout() {
     if (loggingOut) return;
     setLoggingOut(true);
-    await apiFetch(`/api/${variant}/logout`, { method: "POST", body: {} });
-    router.replace(`/${variant}`);
+    await apiFetch("/api/admin/logout", { method: "POST", body: {} });
+    router.replace("/admin");
     router.refresh();
   }
 
@@ -106,17 +76,15 @@ export function PanelShell({
                 </Link>
               );
             })}
-            {variant === "admin" && (
-              <a
-                href="/"
-                target="_blank"
-                rel="noopener"
-                className="flex h-12 items-center gap-3 rounded-xl px-4 font-bold text-white/80 transition hover:bg-white/10 hover:text-white"
-              >
-                <ExternalLink className="size-5" aria-hidden />
-                Apri il quiz
-              </a>
-            )}
+            <a
+              href="/"
+              target="_blank"
+              rel="noopener"
+              className="flex h-12 items-center gap-3 rounded-xl px-4 font-bold text-white/80 transition hover:bg-white/10 hover:text-white"
+            >
+              <ExternalLink className="size-5" aria-hidden />
+              Apri il quiz
+            </a>
           </nav>
           <div className="border-t border-white/10 p-4">
             <p className="mb-3 truncate px-2 text-sm text-white/60">

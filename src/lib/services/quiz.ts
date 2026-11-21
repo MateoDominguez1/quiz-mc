@@ -2,7 +2,18 @@ import "server-only";
 import { getRomeDateString } from "@/lib/date";
 import { callRpc } from "@/lib/supabase/server";
 import { prizeImageUrl } from "@/lib/supabase/storage";
-import { winMessageFor, type AnswerLetter, type ParticipantState, type PrizeType, type PublicQuestion } from "@/types/quiz";
+import {
+  HOUSE_KEYS,
+  winMessageFor,
+  type AnswerLetter,
+  type Difficulty,
+  type GameMode,
+  type GameState,
+  type HouseKey,
+  type MenuInfo,
+  type PrizeKey,
+  type PublicQuestion,
+} from "@/types/quiz";
 
 interface QuestionRow {
   id: string;
@@ -11,22 +22,19 @@ interface QuestionRow {
   answer_b: string;
   answer_c: string;
   answer_d: string;
+  difficulty?: number;
 }
 
 interface StateRow {
-  participant_id: string;
-  answered: boolean;
-  is_correct: boolean | null;
+  game_id: string;
+  mode: GameMode;
+  status: "playing" | "pick_house" | "won" | "lost" | "abandoned";
+  step: number;
+  total_steps: number;
+  correct_count: number;
+  house: string | null;
   question: QuestionRow | null;
-  prize: {
-    type: PrizeType;
-    label: string;
-    win_message: string | null;
-    image_path: string | null;
-    code: string;
-    status: "pending" | "redeemed";
-    redeemed_at: string | null;
-  } | null;
+  prize: { key: PrizeKey; label: string; win_message: string | null; image_path: string | null } | null;
 }
 
 /**
@@ -34,9 +42,11 @@ interface StateRow {
  * la risposta corretta non potrebbe arrivare al browser.
  */
 export function toPublicQuestion(row: QuestionRow): PublicQuestion {
+  const d = Number(row.difficulty ?? 0);
   return {
     id: row.id,
     questionText: row.question_text,
+    difficulty: (d === 1 || d === 2 ? d : 0) as Difficulty,
     answers: [
       { letter: "A", text: row.answer_a },
       { letter: "B", text: row.answer_b },
@@ -46,68 +56,93 @@ export function toPublicQuestion(row: QuestionRow): PublicQuestion {
   };
 }
 
-export type EntryStatus = "valid" | "invalid" | "mine";
-
-/** Stato di un QR (sola lettura, non lo consuma). */
-export async function getEntryStatus(tokenHash: string, participantId: string | null): Promise<EntryStatus> {
-  const res = await callRpc<{ status: EntryStatus }>("entry_status", {
-    p_token_hash: tokenHash,
-    p_participant: participantId,
-  });
-  return res.status;
+export async function getMenuInfo(): Promise<MenuInfo> {
+  const r = await callRpc<{ stock_left: number; casette: MenuInfo["casette"]; bigmac: MenuInfo["bigmac"] }>(
+    "game_availability",
+  );
+  return { stockLeft: Number(r.stock_left), casette: r.casette, bigmac: r.bigmac };
 }
 
 /**
- * Utilizza il QR (atomico nel DB), crea il partecipante con la sua età e gli
- * assegna una domanda casuale del ciclo giornaliero (Europe/Rome).
+ * Stato della postazione: la partita in corso (o appena conclusa) oppure,
+ * se non c'è, la schermata iniziale con la scelta del gioco.
  */
-export async function redeemEntry(
-  tokenHash: string,
-  age: number,
-): Promise<{ status: "ok"; participantId: string } | { status: "invalid" }> {
-  const res = await callRpc<{ status: "ok" | "invalid"; participant_id?: string }>("redeem_entry", {
-    p_token_hash: tokenHash,
-    p_age: age,
-    p_date: getRomeDateString(),
-  });
-  if (res.status === "ok" && res.participant_id) {
-    return { status: "ok", participantId: res.participant_id };
+export async function getGameState(gameId: string | null): Promise<GameState> {
+  const row = gameId ? await callRpc<StateRow | null>("get_game_state", { p_game: gameId }) : null;
+  if (!row || row.status === "abandoned") {
+    return { kind: "menu", menu: await getMenuInfo() };
   }
-  return { status: "invalid" };
-}
-
-export async function getParticipantState(participantId: string | null): Promise<ParticipantState> {
-  if (!participantId) return { kind: "no_session" };
-  const row = await callRpc<StateRow | null>("get_participant_state", { p_participant: participantId });
-  if (!row) return { kind: "no_session" };
-  if (row.answered) {
-    if (row.is_correct && row.prize) {
+  switch (row.status) {
+    case "playing":
+      if (!row.question) return { kind: "menu", menu: await getMenuInfo() };
+      return {
+        kind: "question",
+        mode: row.mode,
+        step: Number(row.step),
+        totalSteps: Number(row.total_steps),
+        question: toPublicQuestion(row.question),
+      };
+    case "pick_house":
+      return { kind: "pick_house" };
+    case "won":
       return {
         kind: "won",
-        prize: {
-          type: row.prize.type,
-          label: row.prize.label,
-          winMessage: winMessageFor(row.prize.type, row.prize.label, row.prize.win_message),
-          imageUrl: prizeImageUrl(row.prize.image_path),
-          code: row.prize.code,
-          status: row.prize.status,
-          redeemedAt: row.prize.redeemed_at,
-        },
+        mode: row.mode,
+        house: HOUSE_KEYS.includes(row.house as HouseKey) ? (row.house as HouseKey) : null,
+        prize: row.prize
+          ? {
+              key: row.prize.key,
+              label: row.prize.label,
+              winMessage: winMessageFor(row.prize.key, row.prize.label, row.prize.win_message),
+              imageUrl: prizeImageUrl(row.prize.image_path),
+            }
+          : null,
       };
-    }
-    return { kind: "lost" };
+    case "lost":
+      return {
+        kind: "lost",
+        mode: row.mode,
+        correctCount: Number(row.correct_count),
+        totalSteps: Number(row.total_steps),
+      };
   }
-  if (!row.question) return { kind: "no_question" };
-  return { kind: "question", question: toPublicQuestion(row.question) };
 }
 
-export type SubmitResult = "ok" | "already_answered" | "no_question" | "not_found";
+export type StartResult = { status: "ok"; gameId: string } | { status: "no_questions" | "no_stock" };
 
-/** Verifica la risposta esclusivamente nel DB; il premio è deciso dal DB. */
-export async function submitAnswer(participantId: string, answer: AnswerLetter): Promise<SubmitResult> {
-  const res = await callRpc<{ status: SubmitResult }>("submit_participant_answer", {
-    p_participant: participantId,
-    p_answer: answer,
+export async function startGame(mode: GameMode): Promise<StartResult> {
+  const r = await callRpc<{ status: "ok" | "no_questions" | "no_stock"; game_id?: string }>("start_game", {
+    p_mode: mode,
+    p_date: getRomeDateString(),
   });
-  return res.status;
+  if (r.status === "ok" && r.game_id) return { status: "ok", gameId: r.game_id };
+  return { status: r.status === "no_stock" ? "no_stock" : "no_questions" };
+}
+
+export type SubmitResult =
+  | { status: "ok"; correct: boolean }
+  | { status: "not_playing" | "no_question" | "not_found" };
+
+/** Verifica la risposta esclusivamente nel DB. */
+export async function submitAnswer(gameId: string, answer: AnswerLetter): Promise<SubmitResult> {
+  const r = await callRpc<{ status: "ok" | "not_playing" | "no_question" | "not_found"; correct?: boolean }>(
+    "submit_game_answer",
+    { p_game: gameId, p_answer: answer },
+  );
+  if (r.status === "ok") return { status: "ok", correct: Boolean(r.correct) };
+  return { status: r.status };
+}
+
+/** Scelta della casetta: il premio viene estratto (e scalato) nel DB. */
+export async function pickHouse(gameId: string, house: HouseKey): Promise<"ok" | "not_allowed" | "not_found"> {
+  const r = await callRpc<{ status: "ok" | "not_allowed" | "not_found" }>("pick_house", {
+    p_game: gameId,
+    p_house: house,
+  });
+  return r.status;
+}
+
+/** "Nuovo cliente": annulla la partita se non è ancora conclusa. */
+export async function abandonGame(gameId: string): Promise<void> {
+  await callRpc("abandon_game", { p_game: gameId });
 }

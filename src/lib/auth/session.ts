@@ -10,8 +10,8 @@ export async function getSession(role: SessionRole): Promise<Session | null> {
 }
 
 /** Per le pagine protette del personale: reindirizza al login se non autenticato. */
-export async function requireStaffPage(role: "admin" | "cassa"): Promise<Session> {
+export async function requireStaffPage(role: "admin" | "postazione"): Promise<Session> {
   const session = await getSession(role);
-  if (!session) redirect(role === "admin" ? "/admin" : "/cassa");
+  if (!session) redirect(role === "admin" ? "/admin" : "/postazione");
   return session;
 }

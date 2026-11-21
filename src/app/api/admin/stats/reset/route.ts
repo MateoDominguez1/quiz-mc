@@ -7,8 +7,9 @@ import { resetStatsSchema } from "@/lib/validation";
 export const dynamic = "force-dynamic";
 
 /**
- * POST /api/admin/stats/reset  { mode: "all" | "keep_pending", confirm: "AZZERA" }
- * Solo amministratore. Irreversibile: richiede la parola di conferma.
+ * POST /api/admin/stats/reset  { confirm: "AZZERA" }
+ * Solo amministratore. Elimina le partite (domande, premi e scorte restano).
+ * Irreversibile: richiede la parola di conferma.
  */
 export async function POST(req: NextRequest) {
   const { denied, session } = await guardStaff(req, "admin");
@@ -23,8 +24,8 @@ export async function POST(req: NextRequest) {
     const limit = await checkRateLimit("stats-reset", session.subject, 5, 600);
     if (!limit.allowed) return errorJson(429, "Troppe richieste. Riprova tra qualche minuto.");
 
-    const result = await resetStats(parsed.data.mode === "keep_pending");
-    console.info(`[admin] Statistiche azzerate da ${session.subject} (modalità ${parsed.data.mode})`, result);
+    const result = await resetStats();
+    console.info(`[admin] Statistiche azzerate da ${session.subject}`, result);
     return json({ ok: true, result });
   } catch (err) {
     return handleUnexpected(err, "POST /api/admin/stats/reset");

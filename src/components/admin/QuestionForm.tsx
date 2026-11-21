@@ -8,7 +8,7 @@ import { useToast } from "@/components/admin/Toast";
 import { Spinner } from "@/components/ui/Spinner";
 import { apiFetch } from "@/lib/client/api";
 import { questionInputSchema, fieldErrors } from "@/lib/validation";
-import { ANSWER_LETTERS, type AdminQuestion, type AnswerLetter } from "@/types/quiz";
+import { ANSWER_LETTERS, DIFFICULTIES, DIFFICULTY_INFO, type AdminQuestion, type AnswerLetter, type Difficulty } from "@/types/quiz";
 
 type FormState = {
   questionText: string;
@@ -17,7 +17,14 @@ type FormState = {
   answerC: string;
   answerD: string;
   correctAnswer: AnswerLetter | "";
+  difficulty: Difficulty;
   isActive: boolean;
+};
+
+const DIFFICULTY_HINT: Record<Difficulty, string> = {
+  0: "Casette della fortuna e 1ª domanda della sfida Big Mac",
+  1: "2ª domanda della sfida Big Mac",
+  2: "3ª domanda della sfida Big Mac",
 };
 
 const answerKey = (l: AnswerLetter) => `answer${l}` as const;
@@ -33,6 +40,7 @@ export function QuestionForm({ initial }: { initial?: AdminQuestion }) {
     answerC: initial?.answerC ?? "",
     answerD: initial?.answerD ?? "",
     correctAnswer: initial?.correctAnswer ?? "",
+    difficulty: initial?.difficulty ?? 0,
     isActive: initial?.isActive ?? true,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -54,7 +62,7 @@ export function QuestionForm({ initial }: { initial?: AdminQuestion }) {
       const errs = fieldErrors(parsed.error);
       setErrors(errs);
       const first = Object.keys(errs)[0];
-      document.getElementById(first === "correctAnswer" ? "correct-A" : first)?.focus();
+      document.getElementById(first === "correctAnswer" ? "correct-A" : first === "difficulty" ? "difficulty-0" : first)?.focus();
       toast.show("error", "Completa tutti i campi obbligatori.");
       return;
     }
@@ -189,12 +197,48 @@ export function QuestionForm({ initial }: { initial?: AdminQuestion }) {
         {errors.correctAnswer && <p className="text-sm font-bold text-brand-red">{errors.correctAnswer}</p>}
       </fieldset>
 
+      <fieldset className="space-y-3 rounded-3xl bg-white p-5 shadow-sm sm:p-6">
+        <legend className="sr-only">Difficoltà</legend>
+        <p className="font-black">
+          Difficoltà <span className="text-brand-red">*</span>
+        </p>
+        <div role="radiogroup" aria-label="Difficoltà" className="grid gap-2 sm:grid-cols-3 sm:gap-3">
+          {DIFFICULTIES.map((d) => {
+            const checked = form.difficulty === d;
+            const info = DIFFICULTY_INFO[d];
+            return (
+              <label
+                key={d}
+                className={`flex cursor-pointer flex-col justify-center rounded-2xl border-2 px-4 py-3 transition ${
+                  checked ? "border-ink bg-ink text-white" : "border-neutral-200 bg-white text-ink hover:border-neutral-300"
+                }`}
+              >
+                <input
+                  id={`difficulty-${d}`}
+                  type="radio"
+                  name="difficulty"
+                  value={d}
+                  checked={checked}
+                  onChange={() => update("difficulty", d)}
+                  className="sr-only"
+                />
+                <span className="text-lg font-black">
+                  {info.emoji} {info.label}
+                </span>
+                <span className={`text-xs font-semibold ${checked ? "text-white/80" : "text-ink-soft"}`}>{DIFFICULTY_HINT[d]}</span>
+              </label>
+            );
+          })}
+        </div>
+        {errors.difficulty && <p className="text-sm font-bold text-brand-red">{errors.difficulty}</p>}
+      </fieldset>
+
       <div className="rounded-3xl bg-white p-5 shadow-sm sm:p-6">
         <label className="flex cursor-pointer items-center justify-between gap-4">
           <span>
             <span className="block font-black">Domanda attiva</span>
             <span className="block text-sm text-ink-soft">
-              Solo le domande attive vengono proposte ai partecipanti.
+              Solo le domande attive vengono proposte ai clienti.
             </span>
           </span>
           <span className="relative inline-flex shrink-0">

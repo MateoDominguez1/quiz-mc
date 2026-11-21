@@ -4,21 +4,23 @@ import { getSessionSecret, getStaffCredentials, type StaffRole } from "@/lib/env
 
 /**
  * Sessioni firmate (JWT HS256) in cookie httpOnly. Ogni ruolo ha un proprio
- * cookie e una propria "audience": un token della cassa non vale per /admin
- * e viceversa; un token partecipante non vale per il personale.
+ * cookie e una propria "audience": un token della postazione non vale per
+ * /admin e viceversa. "game" contiene solo l'ID della partita in corso sul
+ * dispositivo (ricaricando la pagina la partita continua).
  */
-export type SessionRole = StaffRole | "participant";
+export type SessionRole = StaffRole | "game";
 
 const CONFIG: Record<SessionRole, { cookie: string; audience: string; seconds: number }> = {
   admin: { cookie: "qz_admin", audience: "quiz-admin", seconds: 60 * 60 * 8 },
-  cassa: { cookie: "qz_cassa", audience: "quiz-cassa", seconds: 60 * 60 * 12 },
-  participant: { cookie: "qz_player", audience: "quiz-participant", seconds: 60 * 60 * 24 },
+  // Il dispositivo resta abilitato per tutta la durata dell'iniziativa.
+  postazione: { cookie: "qz_station", audience: "quiz-station", seconds: 60 * 60 * 24 * 45 },
+  game: { cookie: "qz_game", audience: "quiz-game", seconds: 60 * 60 * 12 },
 };
 
 export const SESSION_COOKIE: Record<SessionRole, string> = {
   admin: CONFIG.admin.cookie,
-  cassa: CONFIG.cassa.cookie,
-  participant: CONFIG.participant.cookie,
+  postazione: CONFIG.postazione.cookie,
+  game: CONFIG.game.cookie,
 };
 
 export interface Session {
@@ -53,7 +55,7 @@ export async function verifySession(role: SessionRole, token: string | undefined
     });
     if (payload.role !== role || typeof payload.sub !== "string") return null;
     // Se l'utente del personale cambia nelle variabili d'ambiente, le sessioni decadono.
-    if (role !== "participant" && payload.sub !== getStaffCredentials(role).username) return null;
+    if (role !== "game" && payload.sub !== getStaffCredentials(role).username) return null;
     return { role, subject: payload.sub, expiresAt: (payload.exp ?? 0) * 1000 };
   } catch {
     return null;
@@ -64,8 +66,7 @@ export function sessionCookieOptions(role: SessionRole, maxAge = CONFIG[role].se
   return {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    // Il partecipante arriva da un QR (navigazione esterna): serve "lax".
-    sameSite: role === "participant" ? ("lax" as const) : ("strict" as const),
+    sameSite: "strict" as const,
     path: "/",
     maxAge,
   };

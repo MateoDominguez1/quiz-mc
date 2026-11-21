@@ -1,46 +1,94 @@
 export const ANSWER_LETTERS = ["A", "B", "C", "D"] as const;
 export type AnswerLetter = (typeof ANSWER_LETTERS)[number];
 
-export const PRIZE_TYPES = ["braccialetto", "cono", "caffe"] as const;
-export type PrizeType = (typeof PRIZE_TYPES)[number];
+/** I due giochi: una domanda + casetta, oppure tre domande per il Big Mac. */
+export const GAME_MODES = ["casette", "bigmac"] as const;
+export type GameMode = (typeof GAME_MODES)[number];
 
-/**
- * Testi predefiniti dei premi (il tipo di premio è sempre deciso dal server in
- * base all'età). Nome e messaggio sono modificabili dall'amministratore.
- */
-export const PRIZE_INFO: Record<PrizeType, { label: string; ages: string; winMessage: string }> = {
-  braccialetto: { label: "Braccialetto", ages: "0–10 anni", winMessage: "Complimenti! Hai vinto un braccialetto!" },
-  cono: { label: "Cono", ages: "11–17 anni", winMessage: "Complimenti! Hai vinto un cono!" },
-  caffe: { label: "Caffè", ages: "18 anni e oltre", winMessage: "Complimenti! Hai vinto un caffè!" },
+export const GAME_INFO: Record<GameMode, { title: string; subtitle: string; emoji: string; steps: number }> = {
+  casette: { title: "Le casette della fortuna", subtitle: "Una domanda facile • un premio misterioso", emoji: "🏠", steps: 1 },
+  bigmac: { title: "La sfida Big Mac", subtitle: "Tre risposte esatte • un Big Mac", emoji: "🍔", steps: 3 },
+};
+
+/** Difficoltà: 0 = facile, 1 = media, 2 = difficile. */
+export const DIFFICULTIES = [0, 1, 2] as const;
+export type Difficulty = (typeof DIFFICULTIES)[number];
+
+export const DIFFICULTY_INFO: Record<Difficulty, { label: string; emoji: string; badge: string }> = {
+  0: { label: "Facile", emoji: "🟢", badge: "bg-emerald-100 text-emerald-800" },
+  1: { label: "Media", emoji: "🟠", badge: "bg-amber-100 text-amber-800" },
+  2: { label: "Difficile", emoji: "🔴", badge: "bg-red-100 text-brand-red-dark" },
+};
+
+export const PRIZE_KEYS = [
+  "braccialetto",
+  "hamburger",
+  "nuggets",
+  "patatine",
+  "cono",
+  "profumatore",
+  "gadget",
+  "bigmac",
+] as const;
+export type PrizeKey = (typeof PRIZE_KEYS)[number];
+export type PrizePool = "casette" | "bigmac";
+
+/** Testi predefiniti dei premi. Nome e messaggio sono modificabili dall'amministratore. */
+export const PRIZE_INFO: Record<PrizeKey, { label: string; winMessage: string }> = {
+  braccialetto: { label: "Braccialetto", winMessage: "Hai vinto un braccialetto!" },
+  hamburger: { label: "Hamburger", winMessage: "Hai vinto un hamburger!" },
+  nuggets: { label: "Nuggets", winMessage: "Hai vinto i nuggets!" },
+  patatine: { label: "Patatine piccole", winMessage: "Hai vinto le patatine piccole!" },
+  cono: { label: "Cono", winMessage: "Hai vinto un cono!" },
+  profumatore: { label: "Profumatore auto", winMessage: "Hai vinto un profumatore per l'auto!" },
+  gadget: { label: "Gadget vario", winMessage: "Hai vinto un gadget!" },
+  bigmac: { label: "Big Mac", winMessage: "Hai vinto un Big Mac!" },
+};
+
+/** Le cinque Case Ronald del "villaggio della solidarietà". */
+export const HOUSE_KEYS = ["brescia", "firenze", "bologna", "roma-palidoro", "milano-niguarda"] as const;
+export type HouseKey = (typeof HOUSE_KEYS)[number];
+
+export const HOUSE_INFO: Record<HouseKey, { city: string; tagline: string }> = {
+  brescia: { city: "Brescia", tagline: "Montagne e castello" },
+  firenze: { city: "Firenze", tagline: "Cupola e colline" },
+  bologna: { city: "Bologna", tagline: "Portici e torri" },
+  "roma-palidoro": { city: "Roma Palidoro", tagline: "Mare e pini" },
+  "milano-niguarda": { city: "Milano Niguarda", tagline: "Guglie e skyline" },
 };
 
 /**
- * Domanda come viene mostrata al partecipante.
+ * Domanda come viene mostrata al cliente.
  * NON contiene (e non deve mai contenere) la risposta corretta.
  */
 export interface PublicQuestion {
   id: string;
   questionText: string;
+  difficulty: Difficulty;
   answers: { letter: AnswerLetter; text: string }[];
 }
 
 export interface WonPrize {
-  type: PrizeType;
+  key: PrizeKey;
   label: string;
   winMessage: string;
   imageUrl: string | null;
-  code: string;
-  status: "pending" | "redeemed";
-  redeemedAt: string | null;
 }
 
-/** Stato della pagina partecipante calcolato dal server. */
-export type ParticipantState =
-  | { kind: "no_session" }
-  | { kind: "no_question" }
-  | { kind: "question"; question: PublicQuestion }
-  | { kind: "lost" }
-  | { kind: "won"; prize: WonPrize }
+/** Disponibilità dei due giochi, mostrata nella schermata iniziale. */
+export interface MenuInfo {
+  stockLeft: number;
+  casette: "ok" | "no_questions" | "no_stock";
+  bigmac: "ok" | "no_questions";
+}
+
+/** Stato della postazione calcolato dal server. */
+export type GameState =
+  | { kind: "menu"; menu: MenuInfo }
+  | { kind: "question"; mode: GameMode; step: number; totalSteps: number; question: PublicQuestion }
+  | { kind: "pick_house" }
+  | { kind: "won"; mode: GameMode; prize: WonPrize | null; house: HouseKey | null }
+  | { kind: "lost"; mode: GameMode; correctCount: number; totalSteps: number }
   | { kind: "error" };
 
 /** Domanda completa, visibile solo all'amministratore. */
@@ -52,6 +100,7 @@ export interface AdminQuestion {
   answerC: string;
   answerD: string;
   correctAnswer: AnswerLetter;
+  difficulty: Difficulty;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -59,33 +108,44 @@ export interface AdminQuestion {
   timesUsed: number;
 }
 
-export interface AgeBracket {
+export interface ModeStats {
+  played: number;
+  won: number;
+  lost: number;
+  todayPlayed: number;
+  todayWon: number;
+}
+
+export interface PrizeStats {
+  key: PrizeKey;
+  pool: PrizePool;
   label: string;
-  count: number;
-  percent: number;
+  stock: number | null;
+  won: number;
+  wonToday: number;
 }
 
 export interface AdminStats {
   date: string;
-  totalParticipants: number;
-  totalWinners: number;
-  prizesRedeemed: number;
-  prizesPending: number;
-  todayParticipants: number;
-  todayWinners: number;
-  averageAge: number | null;
-  ageBrackets: AgeBracket[];
-  prizesByType: Record<PrizeType, { label: string; won: number; redeemed: number }>;
+  casette: ModeStats;
+  bigmac: ModeStats;
+  abandoned: number;
+  stockLeft: number;
+  prizes: PrizeStats[];
   totalQuestions: number;
-  activeQuestions: number;
+  /** Domande attive per difficoltà [facile, media, difficile]. */
+  activeByDifficulty: [number, number, number];
 }
 
 export interface PrizeSetting {
-  type: PrizeType;
+  key: PrizeKey;
+  pool: PrizePool;
   label: string;
   /** Messaggio personalizzato; null = predefinito. */
   winMessage: string | null;
   imageUrl: string | null;
+  /** Pezzi disponibili (solo casette; null per il Big Mac). */
+  stock: number | null;
   updatedAt: string;
 }
 
@@ -96,33 +156,15 @@ export interface QuestionInput {
   answerC: string;
   answerD: string;
   correctAnswer: AnswerLetter;
+  difficulty: Difficulty;
   isActive: boolean;
 }
 
-/** Risultato della verifica/riscatto di un codice premio in cassa. */
-export type PrizeLookup =
-  | { status: "not_found" }
-  | {
-      status: "pending" | "redeemed" | "already_redeemed";
-      code: string;
-      prizeType: PrizeType;
-      label: string;
-      imageUrl: string | null;
-      redeemedAt: string | null;
-    };
-
-export interface Redemption {
-  code: string;
-  prizeType: PrizeType;
-  label: string;
-  redeemedAt: string;
-}
-
 /** Messaggio di vittoria: quello personalizzato o, in mancanza, quello predefinito. */
-export function winMessageFor(type: PrizeType, label: string, custom: string | null | undefined): string {
+export function winMessageFor(key: PrizeKey, label: string, custom: string | null | undefined): string {
   if (custom && custom.trim()) return custom.trim();
-  if (label.trim().toLocaleLowerCase("it-IT") === PRIZE_INFO[type].label.toLocaleLowerCase("it-IT")) {
-    return PRIZE_INFO[type].winMessage;
+  if (label.trim().toLocaleLowerCase("it-IT") === PRIZE_INFO[key].label.toLocaleLowerCase("it-IT")) {
+    return PRIZE_INFO[key].winMessage;
   }
-  return `Complimenti! Hai vinto: ${label.trim()}!`;
+  return `Hai vinto: ${label.trim()}!`;
 }

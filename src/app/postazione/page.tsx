@@ -4,10 +4,9 @@ import { StaffLoginPage } from "@/components/admin/StaffLoginPage";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Accesso cassa – Il Quiz",
-  robots: { index: false, follow: false },
+  title: "Postazione – Il Quiz",
 };
 
-export default function CassaLoginPage() {
-  return <StaffLoginPage area="cassa" />;
+export default function StationLoginPage() {
+  return <StaffLoginPage area="postazione" />;
 }

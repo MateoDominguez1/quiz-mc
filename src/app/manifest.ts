@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Il Quiz",
     short_name: "Il Quiz",
-    description: "Rispondi alla domanda e vinci un premio!",
+    description: "Le casette della fortuna & la sfida Big Mac",
     lang: "it",
     start_url: "/",
     scope: "/",

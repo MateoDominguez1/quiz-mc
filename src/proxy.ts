@@ -2,14 +2,17 @@ import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySession } from "@/lib/auth/token";
 
 /**
- * Protezione ottimistica delle aree del personale (/admin e /cassa).
+ * Protezione ottimistica delle aree riservate:
+ *  - /admin → pannello amministratore;
+ *  - /      → il quiz, giocabile solo sul dispositivo abilitato (login in /postazione).
  * La verifica definitiva avviene comunque in ogni pagina e API.
  */
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  const role = pathname.startsWith("/cassa") ? "cassa" : "admin";
-  const base = `/${role}`;
-  const home = role === "admin" ? "/admin/dashboard" : "/cassa/dashboard";
+  const isAdmin = pathname.startsWith("/admin");
+  const role = isAdmin ? "admin" : "postazione";
+  const loginPage = isAdmin ? "/admin" : "/postazione";
+  const home = isAdmin ? "/admin/dashboard" : "/";
 
   let session = null;
   try {
@@ -18,16 +21,16 @@ export async function proxy(req: NextRequest) {
     session = null; // configurazione mancante: trattato come non autenticato
   }
 
-  const isLoginPage = pathname === base || pathname === `${base}/`;
+  const isLoginPage = pathname === loginPage || pathname === `${loginPage}/`;
   if (isLoginPage && session) {
     return NextResponse.redirect(new URL(home, req.url));
   }
   if (!isLoginPage && !session) {
-    return NextResponse.redirect(new URL(base, req.url));
+    return NextResponse.redirect(new URL(loginPage, req.url));
   }
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/admin", "/admin/:path*", "/cassa", "/cassa/:path*"],
+  matcher: ["/", "/postazione", "/admin", "/admin/:path*"],
 };

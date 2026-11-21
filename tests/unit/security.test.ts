@@ -2,7 +2,14 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { toPublicQuestion } from "@/lib/services/quiz";
-import { ageSchema, answerSubmissionSchema, entrySchema, prizeTypeSchema, questionInputSchema } from "@/lib/validation";
+import {
+  answerSubmissionSchema,
+  houseSchema,
+  prizeKeySchema,
+  prizeUpdateSchema,
+  questionInputSchema,
+  startGameSchema,
+} from "@/lib/validation";
 
 describe("protezione della risposta corretta", () => {
   it("toPublicQuestion scarta qualsiasi campo non previsto (es. correct_answer)", () => {
@@ -13,12 +20,13 @@ describe("protezione della risposta corretta", () => {
       answer_b: "b",
       answer_c: "c",
       answer_d: "d",
-      question_date: "2026-11-13",
-      already_answered: false,
+      difficulty: 2,
       correct_answer: "C",
+      is_correct: true,
     };
     const pub = toPublicQuestion(row);
     expect(JSON.stringify(pub)).not.toMatch(/correct/i);
+    expect(pub.difficulty).toBe(2);
     expect(pub.answers.map((a) => a.letter)).toEqual(["A", "B", "C", "D"]);
   });
 
@@ -49,6 +57,7 @@ describe("validazione", () => {
     answerC: "Tre",
     answerD: "Quattro",
     correctAnswer: "B",
+    difficulty: 1,
     isActive: true,
   };
 
@@ -62,6 +71,8 @@ describe("validazione", () => {
     expect(questionInputSchema.safeParse({ ...valid, correctAnswer: "E" }).success).toBe(false);
     expect(questionInputSchema.safeParse({ ...valid, correctAnswer: "" }).success).toBe(false);
     expect(questionInputSchema.safeParse({ ...valid, answerB: "uno" }).success).toBe(false);
+    expect(questionInputSchema.safeParse({ ...valid, difficulty: 3 }).success).toBe(false);
+    expect(questionInputSchema.safeParse({ ...valid, difficulty: "1" }).success).toBe(false);
   });
 
   it("rifiuta invii di risposta malformati", () => {
@@ -71,25 +82,21 @@ describe("validazione", () => {
     expect(answerSubmissionSchema.safeParse({}).success).toBe(false);
   });
 
-  it("età: solo interi da 0 a 120", () => {
-    for (const ok of [0, 10, 11, 17, 18, 120, "0", "25", " 42 "]) {
-      expect(ageSchema.safeParse(ok).success, String(ok)).toBe(true);
-    }
-    for (const bad of [-1, 121, 12.5, "12.5", "-3", "abc", "", "1e2", null, undefined, true, "0x10"]) {
-      expect(ageSchema.safeParse(bad).success, String(bad)).toBe(false);
-    }
-    expect(ageSchema.parse("07")).toBe(7);
+  it("gioco, casetta e premi ammessi", () => {
+    expect(startGameSchema.safeParse({ mode: "casette" }).success).toBe(true);
+    expect(startGameSchema.safeParse({ mode: "bigmac" }).success).toBe(true);
+    expect(startGameSchema.safeParse({ mode: "tombola" }).success).toBe(false);
+    expect(houseSchema.safeParse({ house: "roma-palidoro" }).success).toBe(true);
+    expect(houseSchema.safeParse({ house: "napoli" }).success).toBe(false);
+    expect(prizeKeySchema.safeParse("profumatore").success).toBe(true);
+    expect(prizeKeySchema.safeParse("caffe").success).toBe(false);
   });
 
-  it("token QR: formato base64url di 43 caratteri", () => {
-    const token = "A".repeat(43);
-    expect(entrySchema.safeParse({ token, age: 20 }).success).toBe(true);
-    expect(entrySchema.safeParse({ token: token.slice(1), age: 20 }).success).toBe(false);
-    expect(entrySchema.safeParse({ token: `${token.slice(1)}/`, age: 20 }).success).toBe(false);
-  });
-
-  it("tipi di premio ammessi", () => {
-    expect(prizeTypeSchema.safeParse("cono").success).toBe(true);
-    expect(prizeTypeSchema.safeParse("pizza").success).toBe(false);
+  it("pezzi disponibili: interi da 0 a 99999 (o null)", () => {
+    expect(prizeUpdateSchema.parse({ label: "Cono", stock: 10 }).stock).toBe(10);
+    expect(prizeUpdateSchema.parse({ label: "Big Mac" }).stock).toBeNull();
+    for (const bad of [-1, 1.5, 100000, "5"]) {
+      expect(prizeUpdateSchema.safeParse({ label: "Cono", stock: bad }).success, String(bad)).toBe(false);
+    }
   });
 });

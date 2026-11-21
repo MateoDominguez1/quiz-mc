@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { errorJson, guardAdmin, handleUnexpected, json } from "@/lib/http";
 import { MAX_IMAGE_BYTES, detectImageType, replacePrizeImage } from "@/lib/services/prizes";
-import { prizeTypeSchema } from "@/lib/validation";
+import { prizeKeySchema } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +15,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ type: stri
   if (denied) return denied;
 
   const { type } = await ctx.params;
-  const prize = prizeTypeSchema.safeParse(type);
+  const prize = prizeKeySchema.safeParse(type);
   if (!prize.success) return errorJson(404, "Premio non trovato");
 
   let file: File | null = null;

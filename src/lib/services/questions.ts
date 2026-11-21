@@ -1,7 +1,7 @@
 import "server-only";
 import { getRomeDateString } from "@/lib/date";
 import { callRpc } from "@/lib/supabase/server";
-import { PRIZE_INFO, PRIZE_TYPES, type AdminQuestion, type AdminStats, type AnswerLetter, type PrizeType, type QuestionInput } from "@/types/quiz";
+import type { AdminQuestion, AdminStats, AnswerLetter, Difficulty, ModeStats, PrizeKey, PrizePool, QuestionInput } from "@/types/quiz";
 
 interface QuestionRow {
   id: string;
@@ -11,6 +11,7 @@ interface QuestionRow {
   answer_c: string;
   answer_d: string;
   correct_answer: string;
+  difficulty: number;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -27,6 +28,7 @@ function toAdminQuestion(row: QuestionRow): AdminQuestion {
     answerC: row.answer_c,
     answerD: row.answer_d,
     correctAnswer: row.correct_answer.trim() as AnswerLetter,
+    difficulty: ([0, 1, 2].includes(Number(row.difficulty)) ? Number(row.difficulty) : 0) as Difficulty,
     isActive: row.is_active,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -43,6 +45,7 @@ function toArgs(input: QuestionInput) {
     p_answer_c: input.answerC,
     p_answer_d: input.answerD,
     p_correct_answer: input.correctAnswer,
+    p_difficulty: input.difficulty,
     p_is_active: input.isActive,
   };
 }
@@ -83,65 +86,57 @@ export async function deleteQuestion(id: string): Promise<boolean> {
   return Boolean(res?.deleted);
 }
 
+interface ModeRow {
+  played: number;
+  won: number;
+  lost: number;
+  today_played: number;
+  today_won: number;
+}
+
+function toModeStats(r: ModeRow | undefined): ModeStats {
+  return {
+    played: Number(r?.played ?? 0),
+    won: Number(r?.won ?? 0),
+    lost: Number(r?.lost ?? 0),
+    todayPlayed: Number(r?.today_played ?? 0),
+    todayWon: Number(r?.today_won ?? 0),
+  };
+}
+
 export async function getStats(): Promise<AdminStats> {
   const s = await callRpc<{
     date: string;
-    total_participants: number;
-    total_winners: number;
-    prizes_redeemed: number;
-    prizes_pending: number;
-    today_participants: number;
-    today_winners: number;
-    average_age: number | string | null;
-    age_brackets: { label: string; count: number | string; percent: number | string }[];
-    prizes_by_type: Record<PrizeType, { label?: string; won: number; redeemed: number }>;
+    casette: ModeRow;
+    bigmac: ModeRow;
+    abandoned: number;
+    stock_left: number;
+    prizes: { key: PrizeKey; pool: PrizePool; label: string; stock: number | null; won: number; won_today: number }[];
     total_questions: number;
-    active_questions: number;
+    active_by_difficulty: number[] | null;
   }>("admin_get_stats", { p_date: getRomeDateString() });
-  const byType = {} as AdminStats["prizesByType"];
-  for (const t of PRIZE_TYPES) {
-    const v = s.prizes_by_type?.[t];
-    byType[t] = { label: v?.label ?? PRIZE_INFO[t].label, won: Number(v?.won ?? 0), redeemed: Number(v?.redeemed ?? 0) };
-  }
+  const byLevel = s.active_by_difficulty ?? [];
   return {
     date: s.date,
-    totalParticipants: Number(s.total_participants),
-    totalWinners: Number(s.total_winners),
-    prizesRedeemed: Number(s.prizes_redeemed),
-    prizesPending: Number(s.prizes_pending),
-    todayParticipants: Number(s.today_participants),
-    todayWinners: Number(s.today_winners),
-    averageAge: s.average_age === null ? null : Number(s.average_age),
-    ageBrackets: (s.age_brackets ?? []).map((b) => ({
-      label: b.label,
-      count: Number(b.count),
-      percent: Number(b.percent),
+    casette: toModeStats(s.casette),
+    bigmac: toModeStats(s.bigmac),
+    abandoned: Number(s.abandoned),
+    stockLeft: Number(s.stock_left),
+    prizes: (s.prizes ?? []).map((p) => ({
+      key: p.key,
+      pool: p.pool,
+      label: p.label,
+      stock: p.stock === null ? null : Number(p.stock),
+      won: Number(p.won),
+      wonToday: Number(p.won_today),
     })),
-    prizesByType: byType,
     totalQuestions: Number(s.total_questions),
-    activeQuestions: Number(s.active_questions),
+    activeByDifficulty: [Number(byLevel[0] ?? 0), Number(byLevel[1] ?? 0), Number(byLevel[2] ?? 0)],
   };
 }
 
-export interface ResetResult {
-  participantsDeleted: number;
-  prizesDeleted: number;
-  entriesDeleted: number;
-  pendingKept: number;
-}
-
-/** Azzera le statistiche (domande e foto restano). Operazione irreversibile. */
-export async function resetStats(keepPending: boolean): Promise<ResetResult> {
-  const r = await callRpc<{
-    participants_deleted: number;
-    prizes_deleted: number;
-    entries_deleted: number;
-    pending_kept: number;
-  }>("admin_reset_stats", { p_keep_pending: keepPending });
-  return {
-    participantsDeleted: Number(r.participants_deleted),
-    prizesDeleted: Number(r.prizes_deleted),
-    entriesDeleted: Number(r.entries_deleted),
-    pendingKept: Number(r.pending_kept),
-  };
+/** Azzera le statistiche (elimina le partite; domande, premi e scorte restano). Irreversibile. */
+export async function resetStats(): Promise<{ gamesDeleted: number }> {
+  const r = await callRpc<{ games_deleted: number }>("admin_reset_stats");
+  return { gamesDeleted: Number(r.games_deleted) };
 }

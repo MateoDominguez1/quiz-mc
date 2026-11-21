@@ -1,6 +1,7 @@
 import "server-only";
 import type { NextRequest } from "next/server";
 import { verifyStaffCredentials } from "@/lib/auth/credentials";
+import type { StaffRole } from "@/lib/env";
 import { SESSION_COOKIE, sessionCookieOptions, signSession } from "@/lib/auth/token";
 import { errorJson, getClientIp, handleUnexpected, isSameOrigin, json, readJson } from "@/lib/http";
 import { checkRateLimit, resetRateLimit } from "@/lib/services/rate-limit";
@@ -11,8 +12,8 @@ const WINDOW_SECONDS = 15 * 60;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/** Login del personale (admin o cassa) con protezione brute force per IP. */
-export function staffLoginHandler(role: "admin" | "cassa") {
+/** Login del personale (admin o postazione) con protezione brute force per IP. */
+export function staffLoginHandler(role: StaffRole) {
   return async function POST(req: NextRequest) {
     if (!isSameOrigin(req)) {
       return errorJson(403, "Richiesta non consentita");
@@ -57,7 +58,7 @@ export function staffLoginHandler(role: "admin" | "cassa") {
   };
 }
 
-export function staffLogoutHandler(role: "admin" | "cassa") {
+export function staffLogoutHandler(role: StaffRole) {
   return async function POST(req: NextRequest) {
     if (!isSameOrigin(req)) {
       return errorJson(403, "Richiesta non consentita");

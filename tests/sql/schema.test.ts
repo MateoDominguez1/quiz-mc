@@ -4,9 +4,8 @@
  * Nota: PGlite ha una sola connessione, quindi le richieste "simultanee"
  * (Promise.all) vengono eseguite una dopo l'altra. I test verificano che la
  * logica sia corretta qualunque sia l'ordine; in PostgreSQL reale l'atomicità
- * è garantita dagli UPDATE condizionali (lock di riga) e dagli advisory lock.
+ * è garantita dai lock di riga (FOR UPDATE) e dagli advisory lock.
  */
-import { createHash, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { PGlite } from "@electric-sql/pglite";
@@ -14,6 +13,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 const schema = readFileSync(join(__dirname, "../../supabase/schema.sql"), "utf8");
 const schemaV1 = readFileSync(join(__dirname, "fixtures/schema-v1.sql"), "utf8");
+const schemaV2 = readFileSync(join(__dirname, "fixtures/schema-v2.sql"), "utf8");
 
 const ROLES = `
   do $$ begin
@@ -29,47 +29,51 @@ async function rpc<T = Record<string, unknown>>(sql: string, params: unknown[] =
   return res.rows[0].r;
 }
 
-async function createQuestion(text: string, correct = "B", active = true) {
+/** Risposta corretta sempre "B" (salvo diversa indicazione). */
+async function createQuestion(text: string, difficulty = 0, correct = "B", active = true) {
   return rpc<{ id: string }>(
-    "public.admin_create_question($1, 'Uno', 'Due', 'Tre', 'Quattro', $2, $3)",
-    [text, correct, active],
+    "public.admin_create_question($1, 'Uno', 'Due', 'Tre', 'Quattro', $2, $3, $4)",
+    [text, correct, difficulty, active],
   );
 }
 
-function newToken() {
-  const token = randomBytes(32).toString("base64url");
-  return { token, hash: createHash("sha256").update(token).digest("hex") };
+async function seedAllLevels(perLevel = 3) {
+  for (const lvl of [0, 1, 2]) {
+    for (let i = 0; i < perLevel; i++) await createQuestion(`L${lvl}-${i}`, lvl);
+  }
 }
 
-async function createEntry(ttl = 60) {
-  const t = newToken();
-  const e = await rpc<{ id: string }>("public.cassa_create_entry($1, $2, 'cassa')", [t.hash, ttl]);
-  return { ...t, id: e.id };
+interface GameState {
+  mode: string;
+  status: string;
+  step: number;
+  total_steps: number;
+  correct_count: number;
+  house: string | null;
+  question: { id: string; difficulty: number; question_text: string } | null;
+  prize: { key: string; label: string } | null;
 }
 
-async function join_(age: number, date = "2026-11-15") {
-  const e = await createEntry();
-  const r = await rpc<{ status: string; participant_id: string }>(
-    "public.redeem_entry($1, $2, $3::date)",
-    [e.hash, age, date],
-  );
+async function start(mode: "casette" | "bigmac", date = "2026-11-15") {
+  const r = await rpc<{ status: string; game_id: string }>("public.start_game($1, $2::date)", [mode, date]);
   expect(r.status).toBe("ok");
-  return r.participant_id;
+  return r.game_id;
 }
 
-async function questionOf(pid: string): Promise<string> {
-  const s = await rpc<{ question: { id: string } }>("public.get_participant_state($1::uuid)", [pid]);
-  return s.question.id;
+const state = (gid: string) => rpc<GameState>("public.get_game_state($1::uuid)", [gid]);
+const answer = (gid: string, a: string) =>
+  rpc<{ status: string; correct?: boolean }>("public.submit_game_answer($1::uuid, $2)", [gid, a]);
+const house = (gid: string, h = "firenze") =>
+  rpc<{ status: string; prize_key: string | null }>("public.pick_house($1::uuid, $2)", [gid, h]);
+
+async function stockOf(key: string): Promise<number | null> {
+  const r = await db.query<{ stock: number | null }>("select stock from prizes where key = $1", [key]);
+  return r.rows[0].stock;
 }
 
-async function correctAnswerOf(qid: string): Promise<string> {
-  const r = await db.query<{ c: string }>("select correct_answer c from questions where id = $1", [qid]);
-  return r.rows[0].c.trim();
-}
-
-async function wrongAnswerOf(qid: string): Promise<string> {
-  const c = await correctAnswerOf(qid);
-  return ["A", "B", "C", "D"].find((l) => l !== c)!;
+async function totalStock(): Promise<number> {
+  const r = await db.query<{ n: number }>("select coalesce(sum(stock), 0)::int n from prizes");
+  return r.rows[0].n;
 }
 
 beforeEach(async () => {
@@ -79,385 +83,374 @@ beforeEach(async () => {
   await db.exec(schema); // idempotente
 });
 
-describe("QR monouso", () => {
-  it("primo utilizzo valido, secondo utilizzo rifiutato", async () => {
-    await createQuestion("D1");
-    const e = await createEntry();
-    expect((await rpc("public.entry_status($1, null)", [e.hash])).status).toBe("valid");
-
-    const first = await rpc("public.redeem_entry($1, 30, '2026-11-15'::date)", [e.hash]);
-    expect(first.status).toBe("ok");
-    const second = await rpc("public.redeem_entry($1, 30, '2026-11-15'::date)", [e.hash]);
-    expect(second.status).toBe("invalid");
-    expect((await rpc("public.entry_status($1, null)", [e.hash])).status).toBe("invalid");
-    // Lo stesso partecipante che ricarica la pagina viene riconosciuto.
-    expect((await rpc("public.entry_status($1, $2::uuid)", [e.hash, first.participant_id])).status).toBe("mine");
-  });
-
-  it("due scansioni simultanee: una sola ha successo", async () => {
-    await createQuestion("D1");
-    const e = await createEntry();
-    const results = await Promise.all([
-      rpc("public.redeem_entry($1, 20, '2026-11-15'::date)", [e.hash]),
-      rpc("public.redeem_entry($1, 40, '2026-11-15'::date)", [e.hash]),
+describe("premi iniziali", () => {
+  it("scorte delle casette e Big Mac senza scorta", async () => {
+    const list = await rpc<{ key: string; pool: string; stock: number | null; label: string }[]>("public.admin_list_prizes()");
+    expect(list.map((p) => [p.key, p.stock])).toEqual([
+      ["braccialetto", 55],
+      ["hamburger", 10],
+      ["nuggets", 10],
+      ["patatine", 10],
+      ["cono", 10],
+      ["profumatore", 10],
+      ["gadget", 50],
+      ["bigmac", null],
     ]);
-    expect(results.map((r) => r.status).sort()).toEqual(["invalid", "ok"]);
-    const n = await db.query<{ c: number }>("select count(*)::int c from participants");
-    expect(n.rows[0].c).toBe(1);
+    expect(list.at(-1)).toMatchObject({ pool: "bigmac", label: "Big Mac" });
+    expect(await totalStock()).toBe(155);
   });
 
-  it("token inesistente, scaduto o annullato non è valido", async () => {
-    expect((await rpc("public.redeem_entry($1, 30, null)", ["0".repeat(64)])).status).toBe("invalid");
-
-    const expired = await createEntry(1);
-    await db.query("update entry_qr_codes set expires_at = now() - interval '1 second' where id = $1", [expired.id]);
-    expect((await rpc("public.redeem_entry($1, 30, null)", [expired.hash])).status).toBe("invalid");
-    expect((await rpc("public.cassa_entry_status($1::uuid)", [expired.id])).status).toBe("expired");
-
-    const cancelled = await createEntry();
-    expect((await rpc("public.cassa_cancel_entry($1::uuid)", [cancelled.id])).cancelled).toBe(true);
-    expect((await rpc("public.redeem_entry($1, 30, null)", [cancelled.hash])).status).toBe("invalid");
-  });
-
-  it("rifiuta età non valide senza consumare il QR", async () => {
-    const e = await createEntry();
-    await expect(rpc("public.redeem_entry($1, -1, null)", [e.hash])).rejects.toThrow(/invalid_age/);
-    await expect(rpc("public.redeem_entry($1, 121, null)", [e.hash])).rejects.toThrow(/invalid_age/);
-    expect((await rpc("public.entry_status($1, null)", [e.hash])).status).toBe("valid");
-  });
-
-  it("salva solo l'hash del token", async () => {
-    const e = await createEntry();
-    const r = await db.query<{ token_hash: string }>("select token_hash from entry_qr_codes where id = $1", [e.id]);
-    expect(r.rows[0].token_hash).toBe(e.hash);
-    expect(r.rows[0].token_hash).not.toContain(e.token);
+  it("rieseguire lo schema non azzera le scorte", async () => {
+    await db.query("update prizes set stock = 3 where key = 'cono'");
+    await db.exec(schema);
+    expect(await stockOf("cono")).toBe(3);
   });
 });
 
-describe("domande casuali", () => {
-  it("partecipanti diversi ricevono domande diverse finché disponibili", async () => {
-    for (let i = 0; i < 5; i++) await createQuestion(`D${i}`);
-    const pids = await Promise.all([1, 2, 3, 4, 5].map(() => join_(30)));
-    const qs = await Promise.all(pids.map(questionOf));
-    expect(new Set(qs).size).toBe(5);
+describe("Le casette della fortuna", () => {
+  it("una domanda facile → scelta della casetta → premio estratto e scorta scalata", async () => {
+    await createQuestion("Facile", 0);
+    await createQuestion("Difficile", 2);
+    const gid = await start("casette");
+
+    const s1 = await state(gid);
+    expect(s1).toMatchObject({ mode: "casette", status: "playing", step: 1, total_steps: 1 });
+    expect(s1.question?.difficulty).toBe(0);
+    expect(JSON.stringify(s1)).not.toMatch(/correct_answer/);
+
+    expect(await answer(gid, "b")).toEqual({ status: "ok", correct: true });
+    expect((await state(gid)).status).toBe("pick_house");
+    // Non si può rispondere di nuovo.
+    expect((await answer(gid, "B")).status).toBe("not_playing");
+
+    const before = await totalStock();
+    const picked = await house(gid, "roma-palidoro");
+    expect(picked.status).toBe("ok");
+    expect(picked.prize_key).toBeTruthy();
+    expect(await totalStock()).toBe(before - 1);
+
+    const s2 = await state(gid);
+    expect(s2).toMatchObject({ status: "won", house: "roma-palidoro", question: null });
+    expect(s2.prize?.key).toBe(picked.prize_key);
+
+    // Una sola casetta per partita.
+    expect((await house(gid, "brescia")).status).toBe("not_allowed");
+    expect(await totalStock()).toBe(before - 1);
   });
 
-  it("esaurite le domande inizia un nuovo ciclo, senza ripetere subito l'ultima", async () => {
-    for (let i = 0; i < 3; i++) await createQuestion(`D${i}`);
-    const qs: string[] = [];
-    for (let i = 0; i < 9; i++) qs.push(await questionOf(await join_(30)));
-    // Ogni ciclo di 3 contiene tutte le domande.
-    for (let c = 0; c < 3; c++) expect(new Set(qs.slice(c * 3, c * 3 + 3)).size).toBe(3);
-    // Mai la stessa domanda due volte di fila.
-    for (let i = 1; i < qs.length; i++) expect(qs[i]).not.toBe(qs[i - 1]);
+  it("risposta sbagliata: partita persa, nessuna casetta", async () => {
+    await createQuestion("Facile", 0);
+    const gid = await start("casette");
+    expect(await answer(gid, "A")).toEqual({ status: "ok", correct: false });
+    const s = await state(gid);
+    expect(s.status).toBe("lost");
+    expect(s.prize).toBeNull();
+    expect((await house(gid)).status).toBe("not_allowed");
+    expect(await totalStock()).toBe(155);
   });
 
-  it("con una sola domanda attiva la assegna comunque", async () => {
-    await createQuestion("Unica");
-    const a = await questionOf(await join_(30));
-    const b = await questionOf(await join_(30));
-    expect(a).toBe(b);
+  it("l'estrazione segue le scorte: un premio esaurito non esce più", async () => {
+    await createQuestion("Facile", 0);
+    await db.query("update prizes set stock = 0 where pool = 'casette'");
+    await db.query("update prizes set stock = 2 where key = 'nuggets'");
+    await db.query("update prizes set stock = 1 where key = 'cono'");
+    const won: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      const gid = await start("casette");
+      await answer(gid, "B");
+      won.push((await house(gid)).prize_key!);
+    }
+    expect(won.sort()).toEqual(["cono", "nuggets", "nuggets"]);
+    expect(await totalStock()).toBe(0);
   });
 
-  it("ignora le domande disattivate", async () => {
-    const off = await createQuestion("Spenta", "A", false);
-    await createQuestion("Accesa");
-    for (let i = 0; i < 3; i++) expect(await questionOf(await join_(30))).not.toBe(off.id);
+  it("premi esauriti: il gioco non parte", async () => {
+    await createQuestion("Facile", 0);
+    await db.query("update prizes set stock = 0 where pool = 'casette'");
+    expect((await rpc("public.start_game('casette', null)")).status).toBe("no_stock");
+    expect((await rpc("public.game_availability()")).casette).toBe("no_stock");
   });
 
-  it("alle 00:00 italiane riparte il ciclo e lo storico resta", async () => {
-    for (let i = 0; i < 3; i++) await createQuestion(`D${i}`);
-    const day1 = [];
-    for (let i = 0; i < 3; i++) day1.push(await questionOf(await join_(30, "2026-11-15")));
-    const day2 = [];
-    for (let i = 0; i < 3; i++) day2.push(await questionOf(await join_(30, "2026-11-16")));
-    expect(new Set(day1).size).toBe(3);
-    expect(new Set(day2).size).toBe(3);
-    const hist = await db.query<{ d: string; c: number }>(
-      "select assignment_date::text d, count(*)::int c from daily_question_assignments group by 1 order by 1",
-    );
-    expect(hist.rows).toEqual([
-      { d: "2026-11-15", c: 3 },
-      { d: "2026-11-16", c: 3 },
-    ]);
+  it("se le scorte finiscono durante la partita la risposta giusta viene registrata senza premio", async () => {
+    await createQuestion("Facile", 0);
+    const gid = await start("casette");
+    await db.query("update prizes set stock = 0 where pool = 'casette'");
+    expect((await answer(gid, "B")).correct).toBe(true);
+    const s = await state(gid);
+    expect(s.status).toBe("won");
+    expect(s.prize).toBeNull();
   });
 
-  it("senza domande attive il partecipante viene creato ma senza domanda", async () => {
-    const e = await createEntry();
-    const r = await rpc("public.redeem_entry($1, 30, null)", [e.hash]);
-    expect(r.status).toBe("ok");
-    expect(r.has_question).toBe(false);
-    const res = await rpc("public.submit_participant_answer($1::uuid, 'A')", [r.participant_id]);
-    expect(res.status).toBe("no_question");
+  it("due tocchi simultanei sulla casetta: un solo premio", async () => {
+    await createQuestion("Facile", 0);
+    const gid = await start("casette");
+    await answer(gid, "B");
+    const res = await Promise.all([house(gid, "bologna"), house(gid, "firenze")]);
+    expect(res.map((r) => r.status).sort()).toEqual(["not_allowed", "ok"]);
+    expect(await totalStock()).toBe(154);
+  });
+
+  it("rifiuta casette inesistenti", async () => {
+    await createQuestion("Facile", 0);
+    const gid = await start("casette");
+    await answer(gid, "B");
+    await expect(house(gid, "napoli")).rejects.toThrow(/invalid_house/);
+    expect((await state(gid)).status).toBe("pick_house");
+  });
+
+  it("serve almeno una domanda facile attiva", async () => {
+    await createQuestion("Media", 1);
+    await createQuestion("Facile spenta", 0, "B", false);
+    expect((await rpc("public.start_game('casette', null)")).status).toBe("no_questions");
+    const n = await db.query<{ c: number }>("select count(*)::int c from games");
+    expect(n.rows[0].c).toBe(0);
   });
 });
 
-describe("risposta e premi per età", () => {
-  it.each([
-    [0, "braccialetto"],
-    [10, "braccialetto"],
-    [11, "cono"],
-    [17, "cono"],
-    [18, "caffe"],
-    [90, "caffe"],
-  ])("età %i → %s", async (age, prize) => {
-    await createQuestion("D");
-    const pid = await join_(age);
-    const qid = await questionOf(pid);
-    const res = await rpc("public.submit_participant_answer($1::uuid, $2)", [pid, await correctAnswerOf(qid)]);
-    expect(res).toEqual({ status: "ok", correct: true });
-    const st = await rpc<{ prize: { type: string; code: string; status: string } }>(
-      "public.get_participant_state($1::uuid)",
-      [pid],
+describe("La sfida Big Mac", () => {
+  it("tre domande (facile, media, difficile): tutte giuste = Big Mac", async () => {
+    await seedAllLevels();
+    const gid = await start("bigmac");
+    const seen: string[] = [];
+    for (const lvl of [0, 1, 2]) {
+      const s = await state(gid);
+      expect(s).toMatchObject({ status: "playing", step: lvl + 1, total_steps: 3, correct_count: lvl });
+      expect(s.question?.difficulty).toBe(lvl);
+      seen.push(s.question!.id);
+      expect(await answer(gid, "B")).toEqual({ status: "ok", correct: true });
+    }
+    expect(new Set(seen).size).toBe(3);
+    const end = await state(gid);
+    expect(end).toMatchObject({ status: "won", correct_count: 3, house: null });
+    expect(end.prize).toMatchObject({ key: "bigmac", label: "Big Mac" });
+    // Il Big Mac non tocca le scorte delle casette.
+    expect(await totalStock()).toBe(155);
+  });
+
+  it("un errore alla seconda domanda chiude la partita", async () => {
+    await seedAllLevels();
+    const gid = await start("bigmac");
+    await answer(gid, "B");
+    expect(await answer(gid, "D")).toEqual({ status: "ok", correct: false });
+    const s = await state(gid);
+    expect(s).toMatchObject({ status: "lost", step: 2, correct_count: 1, prize: null });
+    expect((await answer(gid, "B")).status).toBe("not_playing");
+  });
+
+  it("servono domande attive di tutte e tre le difficoltà", async () => {
+    await createQuestion("F", 0);
+    await createQuestion("M", 1);
+    expect((await rpc("public.start_game('bigmac', null)")).status).toBe("no_questions");
+    await createQuestion("D", 2);
+    expect((await rpc("public.start_game('bigmac', null)")).status).toBe("ok");
+  });
+
+  it("se la domanda successiva non è più disponibile se ne usa un'altra attiva", async () => {
+    await createQuestion("F1", 0);
+    await createQuestion("F2", 0);
+    await createQuestion("M", 1);
+    const d = await createQuestion("D", 2);
+    const gid = await start("bigmac");
+    await answer(gid, "B");
+    await answer(gid, "B");
+    await rpc("public.admin_set_question_active($1::uuid, false)", [d.id]);
+    // (la terza domanda era già assegnata: la partita continua con quella)
+    expect((await answer(gid, "B")).correct).toBe(true);
+    expect((await state(gid)).status).toBe("won");
+  });
+
+  it("domanda eliminata a metà partita: partita annullata", async () => {
+    await seedAllLevels(1);
+    const gid = await start("bigmac");
+    const q = (await state(gid)).question!;
+    await rpc("public.admin_delete_question($1::uuid)", [q.id]);
+    expect((await answer(gid, "B")).status).toBe("no_question");
+    expect((await state(gid)).status).toBe("abandoned");
+  });
+
+  it("una sola risposta per passo anche con doppio invio", async () => {
+    await seedAllLevels();
+    const gid = await start("bigmac");
+    const res = await Promise.all([answer(gid, "B"), answer(gid, "B")]);
+    expect(res.every((r) => r.status === "ok")).toBe(true);
+    // Il secondo invio vale per la domanda successiva (nuova domanda già assegnata),
+    // mai due volte per la stessa.
+    const answered = await db.query<{ c: number }>(
+      "select count(*)::int c from game_questions where game_id = $1 and selected_answer is not null",
+      [gid],
     );
-    expect(st.prize.type).toBe(prize);
-    expect(st.prize.code).toMatch(/^QUIZ-[2-9A-HJ-NP-Z]{6}$/);
-    expect(st.prize.status).toBe("pending");
+    expect(answered.rows[0].c).toBe(2);
+    const steps = await db.query<{ step: number }>(
+      "select step from game_questions where game_id = $1 order by step",
+      [gid],
+    );
+    expect(steps.rows.map((r) => r.step)).toEqual([1, 2, 3]);
   });
+});
 
-  it("risposta sbagliata: nessun premio e nessuna risposta corretta esposta", async () => {
-    await createQuestion("D");
-    const pid = await join_(30);
-    const qid = await questionOf(pid);
-    const res = await rpc("public.submit_participant_answer($1::uuid, $2)", [pid, await wrongAnswerOf(qid)]);
-    expect(res).toEqual({ status: "ok", correct: false });
-    const st = await rpc("public.get_participant_state($1::uuid)", [pid]);
-    expect(st.prize).toBeNull();
-    expect(JSON.stringify(st)).not.toMatch(/correct_answer/);
-    const n = await db.query<{ c: number }>("select count(*)::int c from prize_codes");
-    expect(n.rows[0].c).toBe(0);
-  });
-
-  it("una sola risposta per partecipazione, anche con invii simultanei", async () => {
-    await createQuestion("D");
-    const pid = await join_(30);
-    const qid = await questionOf(pid);
-    const right = await correctAnswerOf(qid);
-    const wrong = await wrongAnswerOf(qid);
-    const [a, b] = await Promise.all([
-      rpc("public.submit_participant_answer($1::uuid, $2)", [pid, wrong]),
-      rpc("public.submit_participant_answer($1::uuid, $2)", [pid, right]),
-    ]);
-    expect(a).toEqual({ status: "ok", correct: false });
-    expect(b).toEqual({ status: "already_answered", correct: false });
-    const n = await db.query<{ c: number }>("select count(*)::int c from prize_codes");
-    expect(n.rows[0].c).toBe(0);
-  });
-
-  it("i codici premio sono univoci", async () => {
-    await createQuestion("D", "A");
-    const codes = new Set<string>();
+describe("rotazione delle domande (un solo dispositivo, clienti in fila)", () => {
+  it("una domanda non si ripete finché non sono uscite almeno i 2/3 delle altre", async () => {
+    const n = 9;
+    for (let i = 0; i < n; i++) await createQuestion(`F${i}`, 0);
+    const sequence: string[] = [];
     for (let i = 0; i < 40; i++) {
-      const pid = await join_(30);
-      await rpc("public.submit_participant_answer($1::uuid, 'A')", [pid]);
-      const st = await rpc<{ prize: { code: string } }>("public.get_participant_state($1::uuid)", [pid]);
-      codes.add(st.prize.code);
+      const gid = await start("casette");
+      sequence.push((await state(gid)).question!.question_text);
+      await rpc("public.abandon_game($1::uuid)", [gid]);
     }
-    expect(codes.size).toBe(40);
-  });
-
-  it("rifiuta lettere non valide", async () => {
-    await createQuestion("D");
-    const pid = await join_(30);
-    await expect(rpc("public.submit_participant_answer($1::uuid, 'E')", [pid])).rejects.toThrow(/invalid_answer/);
-  });
-});
-
-describe("riscatto premi in cassa", () => {
-  async function winner(age = 30) {
-    await createQuestion("D", "A");
-    const pid = await join_(age);
-    await rpc("public.submit_participant_answer($1::uuid, 'A')", [pid]);
-    const st = await rpc<{ prize: { code: string } }>("public.get_participant_state($1::uuid)", [pid]);
-    return st.prize.code;
-  }
-
-  it("verifica, riscatta e impedisce il doppio riscatto", async () => {
-    const code = await winner(15);
-    const look = await rpc("public.cassa_lookup_prize($1)", [code]);
-    expect(look).toMatchObject({ status: "pending", code, prize_type: "cono", label: "Cono" });
-
-    const r1 = await rpc("public.cassa_redeem_prize($1, 'cassa')", [code]);
-    expect(r1.status).toBe("redeemed");
-    expect(r1.redeemed_at).toBeTruthy();
-
-    const r2 = await rpc("public.cassa_redeem_prize($1, 'cassa')", [code]);
-    expect(r2.status).toBe("already_redeemed");
-    expect(r2.redeemed_at).toBe(r1.redeemed_at);
-    expect((await rpc("public.cassa_lookup_prize($1)", [code])).status).toBe("redeemed");
-  });
-
-  it("due operatori simultanei: un solo riscatto", async () => {
-    const code = await winner();
-    const res = await Promise.all([
-      rpc("public.cassa_redeem_prize($1, 'op1')", [code]),
-      rpc("public.cassa_redeem_prize($1, 'op2')", [code]),
-    ]);
-    expect(res.map((r) => r.status).sort()).toEqual(["already_redeemed", "redeemed"]);
-  });
-
-  it("accetta il codice scritto in modo libero", async () => {
-    const code = await winner();
-    const suffix = code.slice(5);
-    for (const variant of [code.toLowerCase(), ` ${suffix} `, `quiz ${suffix}`, `QUIZ${suffix}`]) {
-      expect((await rpc("public.cassa_lookup_prize($1)", [variant])).code).toBe(code);
-    }
-  });
-
-  it("codice inesistente", async () => {
-    expect((await rpc("public.cassa_lookup_prize('QUIZ-AAAAAA')")).status).toBe("not_found");
-    expect((await rpc("public.cassa_redeem_prize('QUIZ-AAAAAA', 'x')")).status).toBe("not_found");
-    expect((await rpc("public.cassa_lookup_prize('')")).status).toBe("not_found");
-  });
-
-  it("storico riscossioni", async () => {
-    const code = await winner();
-    await rpc("public.cassa_redeem_prize($1, 'cassa')", [code]);
-    const h = await rpc<{ items: { code: string }[]; pending_total: number }>("public.cassa_list_redemptions(50)");
-    expect(h.items.map((i) => i.code)).toEqual([code]);
-    expect(h.pending_total).toBe(0);
-  });
-});
-
-describe("statistiche cumulative", () => {
-  it("conteggi, premi ed età", async () => {
-    await createQuestion("D", "A");
-    const plan: [number, string, boolean][] = [
-      [8, "A", true],
-      [15, "A", true],
-      [40, "A", true],
-      [70, "B", false],
-    ];
-    const codes: string[] = [];
-    for (const [i, [age, ans]] of plan.entries()) {
-      const pid = await join_(age, i < 2 ? "2026-11-14" : "2026-11-15");
-      await rpc("public.submit_participant_answer($1::uuid, $2)", [pid, ans]);
-      const st = await rpc<{ prize: { code: string } | null }>("public.get_participant_state($1::uuid)", [pid]);
-      if (st.prize) codes.push(st.prize.code);
-    }
-    // Un partecipante entrato ma che non ha ancora risposto.
-    await join_(25, "2026-11-15");
-    await rpc("public.cassa_redeem_prize($1, 'cassa')", [codes[0]]);
-
-    const s = await rpc<Record<string, unknown>>("public.admin_get_stats('2026-11-15'::date)");
-    expect(s.total_participants).toBe(5);
-    expect(s.total_winners).toBe(3);
-    expect(s.prizes_redeemed).toBe(1);
-    expect(s.prizes_pending).toBe(2);
-    expect(s.today_participants).toBe(3);
-    expect(s.today_winners).toBe(1);
-    expect(Number(s.average_age)).toBeCloseTo((8 + 15 + 40 + 70 + 25) / 5, 1);
-    const br = s.age_brackets as { label: string; count: number; percent: number }[];
-    expect(Object.fromEntries(br.map((b) => [b.label, b.count]))).toEqual({
-      "0–10": 1, "11–17": 1, "18–29": 1, "30–44": 1, "45–64": 0, "65+": 1,
+    const last = new Map<string, number>();
+    let minGap = Infinity;
+    sequence.forEach((q, i) => {
+      if (last.has(q)) minGap = Math.min(minGap, i - last.get(q)! - 1);
+      last.set(q, i);
     });
-    expect(br.reduce((a, b) => a + Number(b.percent), 0)).toBeCloseTo(100, 0);
-    expect((s.prizes_by_type as Record<string, { won: number; redeemed: number }>).braccialetto).toMatchObject({ label: "Braccialetto", won: 1, redeemed: 1 });
+    expect(minGap).toBeGreaterThanOrEqual(n - Math.ceil(n / 3));
+    // Prima di ripetere qualcosa escono tutte quelle mai usate.
+    expect(new Set(sequence.slice(0, n)).size).toBe(n);
   });
 
-  it("database vuoto", async () => {
-    const s = await rpc<Record<string, unknown>>("public.admin_get_stats(null)");
-    expect(s.total_participants).toBe(0);
-    expect(s.average_age).toBeNull();
-  });
-});
-
-describe("azzeramento statistiche", () => {
-  async function scenario() {
-    await createQuestion("D", "A");
-    const winners: string[] = [];
-    for (const age of [8, 30, 15]) {
-      const pid = await join_(age);
-      await rpc("public.submit_participant_answer($1::uuid, 'A')", [pid]);
-      const st = await rpc<{ prize: { code: string } }>("public.get_participant_state($1::uuid)", [pid]);
-      winners.push(st.prize.code);
+  it("vale anche tra i due giochi e per tutte le difficoltà", async () => {
+    await seedAllLevels(4);
+    const easy: string[] = [];
+    for (let i = 0; i < 12; i++) {
+      const gid = await start(i % 2 ? "casette" : "bigmac");
+      easy.push((await state(gid)).question!.question_text);
+      await rpc("public.abandon_game($1::uuid)", [gid]);
     }
-    const loser = await join_(50);
-    await rpc("public.submit_participant_answer($1::uuid, 'B')", [loser]);
-    await rpc("public.cassa_redeem_prize($1, 'cassa')", [winners[0]]);
-    const unused = await createEntry();
-    return { winners, unused };
-  }
+    for (let i = 1; i < easy.length; i++) {
+      expect(easy.slice(Math.max(0, i - 2), i)).not.toContain(easy[i]);
+    }
+    expect(new Set(easy.slice(0, 4)).size).toBe(4);
+  });
 
-  it("azzera tutto ma conserva domande e foto", async () => {
-    const { winners, unused } = await scenario();
+  it("le domande nuove vengono proposte subito e le disattivate mai", async () => {
+    await createQuestion("Vecchia", 0);
+    for (let i = 0; i < 3; i++) await rpc("public.abandon_game($1::uuid)", [await start("casette")]);
+    await createQuestion("Nuova", 0);
+    await createQuestion("Spenta", 0, "B", false);
+    const gid = await start("casette");
+    expect((await state(gid)).question?.question_text).toBe("Nuova");
+    for (let i = 0; i < 6; i++) {
+      const g = await start("casette");
+      expect((await state(g)).question?.question_text).not.toBe("Spenta");
+      await rpc("public.abandon_game($1::uuid)", [g]);
+    }
+  });
+
+  it("con una sola domanda facile la usa comunque", async () => {
+    await createQuestion("Unica", 0);
+    for (let i = 0; i < 3; i++) {
+      const gid = await start("casette");
+      expect((await state(gid)).question?.question_text).toBe("Unica");
+    }
+  });
+});
+
+describe("nuovo cliente", () => {
+  it("abbandona la partita in corso; le partite concluse restano invariate", async () => {
+    await createQuestion("F", 0);
+    const g1 = await start("casette");
+    expect((await rpc("public.abandon_game($1::uuid)", [g1])).abandoned).toBe(true);
+    expect((await state(g1)).status).toBe("abandoned");
+    expect((await answer(g1, "B")).status).toBe("not_playing");
+
+    const g2 = await start("casette");
+    await answer(g2, "A");
+    expect((await rpc("public.abandon_game($1::uuid)", [g2])).abandoned).toBe(false);
+    expect((await state(g2)).status).toBe("lost");
+  });
+});
+
+describe("statistiche", () => {
+  it("partite, vincite, premi e scorte", async () => {
+    await seedAllLevels();
+    // Casette: 2 vinte (una ieri), 1 persa; Big Mac: 1 vinto, 1 perso; 1 abbandonata.
+    for (const [date, ok] of [["2026-11-14", true], ["2026-11-15", true], ["2026-11-15", false]] as const) {
+      const gid = await start("casette", date);
+      await answer(gid, ok ? "B" : "A");
+      if (ok) await house(gid);
+    }
+    const win = await start("bigmac");
+    for (let i = 0; i < 3; i++) await answer(win, "B");
+    const lose = await start("bigmac");
+    await answer(lose, "C");
+    await rpc("public.abandon_game($1::uuid)", [await start("casette")]);
+
+    const s = await rpc<{
+      casette: Record<string, number>;
+      bigmac: Record<string, number>;
+      abandoned: number;
+      stock_left: number;
+      prizes: { key: string; won: number; stock: number | null }[];
+      total_questions: number;
+      active_by_difficulty: number[];
+    }>("public.admin_get_stats('2026-11-15'::date)");
+    expect(s.casette).toEqual({ played: 3, won: 2, lost: 1, today_played: 2, today_won: 1 });
+    expect(s.bigmac).toEqual({ played: 2, won: 1, lost: 1, today_played: 2, today_won: 1 });
+    expect(s.abandoned).toBe(1);
+    expect(s.stock_left).toBe(153);
+    expect(s.prizes.find((p) => p.key === "bigmac")).toMatchObject({ won: 1, stock: null });
+    expect(s.prizes.filter((p) => p.key !== "bigmac").reduce((a, p) => a + p.won, 0)).toBe(2);
+    expect(s.total_questions).toBe(9);
+    expect(s.active_by_difficulty).toEqual([3, 3, 3]);
+  });
+
+  it("azzeramento: via le partite, restano domande, premi, scorte e rotazione", async () => {
+    await createQuestion("A", 0);
+    await createQuestion("B", 0);
+    const gid = await start("casette");
+    const first = (await state(gid)).question!.question_text;
+    await answer(gid, "B");
+    await house(gid);
     await rpc("public.admin_set_prize_image('cono', 'cono.webp')");
-    const res = await rpc("public.admin_reset_stats(false)");
-    expect(res).toMatchObject({ participants_deleted: 4, prizes_deleted: 3, pending_kept: 0 });
 
-    const s = await rpc<Record<string, unknown>>("public.admin_get_stats(null)");
-    expect([s.total_participants, s.total_winners, s.prizes_redeemed, s.prizes_pending]).toEqual([0, 0, 0, 0]);
-    expect(s.average_age).toBeNull();
-    expect(s.total_questions).toBe(1);
-    expect((await rpc("public.cassa_lookup_prize($1)", [winners[1]])).status).toBe("not_found");
-    expect((await rpc("public.entry_status($1, null)", [unused.hash])).status).toBe("invalid");
-    const photos = await rpc<{ image_path: string | null }[]>("public.admin_list_prize_settings()");
-    expect(photos[1].image_path).toBe("cono.webp");
-    // Il quiz continua a funzionare dopo l'azzeramento.
-    await join_(20);
-  });
-
-  it("conserva i premi da ritirare se richiesto", async () => {
-    const { winners } = await scenario();
-    const res = await rpc("public.admin_reset_stats(true)");
-    expect(res).toMatchObject({ participants_deleted: 2, prizes_deleted: 1, pending_kept: 2 });
-
-    const s = await rpc<Record<string, unknown>>("public.admin_get_stats(null)");
-    expect([s.total_participants, s.total_winners, s.prizes_redeemed, s.prizes_pending]).toEqual([2, 2, 0, 2]);
-    // I codici non ancora ritirati restano validi e riscattabili.
-    expect((await rpc("public.cassa_lookup_prize($1)", [winners[1]])).status).toBe("pending");
-    expect((await rpc("public.cassa_redeem_prize($1, 'cassa')", [winners[2]])).status).toBe("redeemed");
-    expect((await rpc("public.cassa_lookup_prize($1)", [winners[0]])).status).toBe("not_found");
-  });
-
-  it("anon non può azzerare", async () => {
-    await db.exec("set role anon");
-    await expect(db.query("select public.admin_reset_stats(false)")).rejects.toThrow();
-    await db.exec("reset role");
-  });
-});
-
-describe("nomi dei premi", () => {
-  it("l'admin rinomina il premio e il nuovo nome compare ovunque", async () => {
-    const upd = await rpc("public.admin_update_prize('caffe', '  Cappuccino ', 'Complimenti! Hai vinto un cappuccino!')");
-    expect(upd).toMatchObject({ label: "Cappuccino", win_message: "Complimenti! Hai vinto un cappuccino!" });
-
-    await createQuestion("D", "A");
-    const pid = await join_(40);
-    await rpc("public.submit_participant_answer($1::uuid, 'A')", [pid]);
-    const st = await rpc<{ prize: { type: string; label: string; win_message: string; code: string } }>(
-      "public.get_participant_state($1::uuid)",
-      [pid],
+    expect(await rpc("public.admin_reset_stats()")).toEqual({ games_deleted: 1 });
+    const s = await rpc<{ casette: { played: number }; stock_left: number; total_questions: number }>(
+      "public.admin_get_stats(null)",
     );
-    // Il tipo (deciso dall'età) non cambia; cambiano nome e messaggio.
-    expect(st.prize).toMatchObject({ type: "caffe", label: "Cappuccino", win_message: "Complimenti! Hai vinto un cappuccino!" });
-    expect((await rpc("public.cassa_lookup_prize($1)", [st.prize.code])).label).toBe("Cappuccino");
-    const stats = await rpc<{ prizes_by_type: Record<string, { label: string }> }>("public.admin_get_stats(null)");
-    expect(stats.prizes_by_type.caffe.label).toBe("Cappuccino");
-    const list = await rpc<{ prize_type: string; label: string }[]>("public.admin_list_prize_settings()");
-    expect(list.find((p) => p.prize_type === "caffe")?.label).toBe("Cappuccino");
-  });
-
-  it("messaggio vuoto = messaggio predefinito; nome vuoto o troppo lungo rifiutato", async () => {
-    const upd = await rpc("public.admin_update_prize('cono', 'Gelato', '   ')");
-    expect(upd.win_message).toBeNull();
-    await expect(rpc("public.admin_update_prize('cono', '   ', null)")).rejects.toThrow();
-    await expect(rpc("public.admin_update_prize('cono', $1, null)", ["x".repeat(41)])).rejects.toThrow();
-    await expect(rpc("public.admin_update_prize('cono', 'Ok', $1)", ["x".repeat(121)])).rejects.toThrow();
-    expect(await rpc("public.admin_update_prize('pizza', 'Pizza', null)")).toBeNull();
+    expect(s.casette.played).toBe(0);
+    expect(s.stock_left).toBe(154);
+    expect(s.total_questions).toBe(2);
+    const prizes = await rpc<{ key: string; image_path: string | null }[]>("public.admin_list_prizes()");
+    expect(prizes.find((p) => p.key === "cono")?.image_path).toBe("cono.webp");
+    // La domanda appena uscita non viene riproposta subito.
+    const next = await start("casette");
+    expect((await state(next)).question?.question_text).not.toBe(first);
   });
 });
 
-describe("foto premi", () => {
-  it("restituisce il percorso precedente per poterlo eliminare", async () => {
-    const a = await rpc("public.admin_set_prize_image('cono', 'cono-1.webp')");
-    expect(a.previous_path).toBeNull();
-    const b = await rpc("public.admin_set_prize_image('cono', 'cono-2.webp')");
-    expect(b.previous_path).toBe("cono-1.webp");
-    const list = await rpc<{ prize_type: string; image_path: string | null }[]>("public.admin_list_prize_settings()");
-    expect(list.map((p) => p.prize_type)).toEqual(["braccialetto", "cono", "caffe"]);
-    expect(list[1].image_path).toBe("cono-2.webp");
+describe("amministrazione premi e domande", () => {
+  it("nome, messaggio e pezzi disponibili", async () => {
+    const upd = await rpc("public.admin_update_prize('cono', '  Gelato ', '   ', 7)");
+    expect(upd).toMatchObject({ label: "Gelato", win_message: null, stock: 7 });
+    // Scorta null = invariata; per il Big Mac la scorta resta sempre null.
+    expect(await rpc("public.admin_update_prize('cono', 'Gelato', 'Bravo!', null)")).toMatchObject({ stock: 7 });
+    expect(await rpc("public.admin_update_prize('bigmac', 'Big Mac', null, 5)")).toMatchObject({ stock: null });
+    await expect(rpc("public.admin_update_prize('cono', '   ', null, 1)")).rejects.toThrow();
+    await expect(rpc("public.admin_update_prize('cono', 'Ok', null, -1)")).rejects.toThrow();
+    await expect(rpc("public.admin_update_prize('cono', $1, null, 1)", ["x".repeat(41)])).rejects.toThrow();
+    expect(await rpc("public.admin_update_prize('pizza', 'Pizza', null, 1)")).toBeNull();
+  });
+
+  it("foto: restituisce il percorso precedente per poterlo eliminare", async () => {
+    expect((await rpc("public.admin_set_prize_image('gadget', 'g-1.webp')")).previous_path).toBeNull();
+    expect((await rpc("public.admin_set_prize_image('gadget', 'g-2.webp')")).previous_path).toBe("g-1.webp");
     expect(await rpc("public.admin_set_prize_image('pizza', 'x.webp')")).toBeNull();
+  });
+
+  it("difficoltà delle domande", async () => {
+    const q = await createQuestion("Q", 2);
+    expect(q).toMatchObject({ difficulty: 2 });
+    const upd = await rpc(
+      "public.admin_update_question($1::uuid, 'Q', 'Uno', 'Due', 'Tre', 'Quattro', 'A', 1, true)",
+      [q.id],
+    );
+    expect(upd).toMatchObject({ difficulty: 1, correct_answer: "A" });
+    await expect(createQuestion("X", 3)).rejects.toThrow();
+    const list = await rpc<{ difficulty: number; times_used: number; last_used_date: string | null }[]>(
+      "public.admin_list_questions()",
+    );
+    expect(list[0]).toMatchObject({ difficulty: 1, times_used: 0, last_used_date: null });
   });
 });
 
@@ -466,36 +459,60 @@ describe("sicurezza", () => {
     await db.exec("set role anon");
     for (const sql of [
       "select correct_answer from public.questions",
-      "select * from public.prize_codes",
-      "select * from public.entry_qr_codes",
-      "select * from public.participants",
-      "select public.cassa_redeem_prize('QUIZ-AAAAAA', 'x')",
-      "select public.cassa_create_entry(repeat('a', 64), 60, 'x')",
+      "select * from public.games",
+      "select * from public.prizes",
+      "select public.start_game('casette', null)",
+      "select public.pick_house(gen_random_uuid(), 'firenze')",
       "select public.admin_get_stats(null)",
+      "select public.admin_reset_stats()",
     ]) {
       await expect(db.query(sql), sql).rejects.toThrow();
     }
     await db.exec("reset role");
   });
+
+  it("rifiuta modalità e risposte non valide", async () => {
+    await expect(rpc("public.start_game('pizza', null)")).rejects.toThrow(/invalid_mode/);
+    await createQuestion("F", 0);
+    const gid = await start("casette");
+    await expect(answer(gid, "E")).rejects.toThrow(/invalid_answer/);
+    expect((await state(gid)).status).toBe("playing");
+  });
 });
 
-describe("aggiornamento dal database della versione precedente", () => {
-  it("mantiene le domande esistenti e funziona dopo la migrazione", async () => {
+describe("aggiornamento dalle versioni precedenti", () => {
+  it("dalla versione con QR e cassa: domande e foto restano, le nuove funzioni funzionano", async () => {
+    db = new PGlite();
+    await db.exec(ROLES);
+    await db.exec(schemaV2);
+    await db.query("select public.admin_create_question('Domanda esistente', 'a', 'b', 'c', 'd', 'B', true)");
+    await db.query("select public.admin_set_prize_image('cono', 'cono-vecchio.webp')");
+    await db.exec(schema);
+    await db.exec(schema);
+
+    const qs = await rpc<{ question_text: string; difficulty: number }[]>("public.admin_list_questions()");
+    expect(qs).toEqual([expect.objectContaining({ question_text: "Domanda esistente", difficulty: 0 })]);
+    const prizes = await rpc<{ key: string; image_path: string | null }[]>("public.admin_list_prizes()");
+    expect(prizes.find((p) => p.key === "cono")?.image_path).toBe("cono-vecchio.webp");
+    const fns = await db.query<{ c: number }>(
+      "select count(*)::int c from pg_proc where proname in ('redeem_entry', 'cassa_create_entry', 'prize_for_age')",
+    );
+    expect(fns.rows[0].c).toBe(0);
+
+    const gid = await start("casette");
+    expect((await answer(gid, "B")).correct).toBe(true);
+    expect((await house(gid)).status).toBe("ok");
+  });
+
+  it("dalla prima versione (domanda del giorno)", async () => {
     db = new PGlite();
     await db.exec(ROLES);
     await db.exec(schemaV1);
-    await db.query(
-      "select public.admin_create_question('Vecchia domanda', 'a', 'b', 'c', 'd', 'C', true)",
-    );
-    await db.query("select public.get_daily_question('2026-11-10'::date, null)");
+    await db.query("select public.admin_create_question('Vecchia domanda', 'a', 'b', 'c', 'd', 'C', true)");
     await db.exec(schema);
-
-    const qs = await rpc<{ question_text: string; times_used: number }[]>("public.admin_list_questions()");
-    expect(qs.map((q) => q.question_text)).toEqual(["Vecchia domanda"]);
-    const pid = await join_(12);
-    const res = await rpc("public.submit_participant_answer($1::uuid, 'C')", [pid]);
-    expect(res).toEqual({ status: "ok", correct: true });
-    const old = await db.query<{ c: number }>("select count(*)::int c from daily_questions");
-    expect(old.rows[0].c).toBe(1); // storico conservato
+    const gid = await start("casette");
+    expect((await answer(gid, "C")).correct).toBe(true);
+    const old = await db.query<{ c: number }>("select count(*)::int c from questions");
+    expect(old.rows[0].c).toBe(1);
   });
 });

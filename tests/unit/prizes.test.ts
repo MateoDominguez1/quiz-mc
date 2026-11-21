@@ -1,20 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { generateEntryToken, hashEntryToken, isWellFormedEntryToken } from "@/lib/participant";
 import { detectImageType } from "@/lib/services/prizes";
-
-describe("token QR", () => {
-  it("sono casuali, ben formati e l'hash è deterministico", () => {
-    const seen = new Set<string>();
-    for (let i = 0; i < 200; i++) {
-      const { token, hash } = generateEntryToken();
-      expect(isWellFormedEntryToken(token)).toBe(true);
-      expect(hash).toMatch(/^[0-9a-f]{64}$/);
-      expect(hashEntryToken(token)).toBe(hash);
-      seen.add(token);
-    }
-    expect(seen.size).toBe(200);
-  });
-});
 
 describe("riconoscimento formato immagini", () => {
   const pad = (b: number[]) => new Uint8Array([...b, ...new Array(16).fill(0)]);
@@ -33,7 +18,8 @@ describe("messaggio di vittoria", () => {
   it("usa il messaggio personalizzato, poi quello predefinito, poi uno generico", async () => {
     const { winMessageFor } = await import("@/types/quiz");
     expect(winMessageFor("cono", "Gelato", "Bravo! Un gelato per te!")).toBe("Bravo! Un gelato per te!");
-    expect(winMessageFor("cono", "Cono", null)).toBe("Complimenti! Hai vinto un cono!");
-    expect(winMessageFor("caffe", "Cappuccino", "  ")).toBe("Complimenti! Hai vinto: Cappuccino!");
+    expect(winMessageFor("cono", "Cono", null)).toBe("Hai vinto un cono!");
+    expect(winMessageFor("bigmac", "big mac", null)).toBe("Hai vinto un Big Mac!");
+    expect(winMessageFor("gadget", "Portachiavi", "  ")).toBe("Hai vinto: Portachiavi!");
   });
 });

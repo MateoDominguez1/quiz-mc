@@ -8,31 +8,15 @@ import { Spinner } from "@/components/ui/Spinner";
 import { apiFetch } from "@/lib/client/api";
 import { RESET_CONFIRM_WORD } from "@/lib/validation";
 
-type Mode = "keep_pending" | "all";
-
-const OPTIONS: { value: Mode; title: string; text: string }[] = [
-  {
-    value: "keep_pending",
-    title: "Conserva i premi da ritirare",
-    text: "I clienti che non hanno ancora ritirato il premio potranno usare il loro codice. Consigliato.",
-  },
-  {
-    value: "all",
-    title: "Azzera tutto",
-    text: "Anche i codici premio non ancora ritirati e i QR non usati smetteranno di funzionare.",
-  },
-];
-
 /**
  * "Zona pericolosa" della dashboard: doppia conferma (apertura della finestra
  * + parola AZZERA da digitare). L'operazione avviene sul server.
  */
-export function ResetStats({ pendingPrizes }: { pendingPrizes: number }) {
+export function ResetStats() {
   const router = useRouter();
   const toast = useToast();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState<Mode>("keep_pending");
   const [word, setWord] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -47,7 +31,6 @@ export function ResetStats({ pendingPrizes }: { pendingPrizes: number }) {
     if (loading) return;
     setOpen(false);
     setWord("");
-    setMode("keep_pending");
   }
 
   const confirmed = word.trim().toUpperCase() === RESET_CONFIRM_WORD;
@@ -55,18 +38,13 @@ export function ResetStats({ pendingPrizes }: { pendingPrizes: number }) {
   async function reset() {
     if (!confirmed || loading) return;
     setLoading(true);
-    const res = await apiFetch<{ result: { participantsDeleted: number; pendingKept: number } }>("/api/admin/stats/reset", {
+    const res = await apiFetch<{ result: { gamesDeleted: number } }>("/api/admin/stats/reset", {
       method: "POST",
-      body: { mode, confirm: RESET_CONFIRM_WORD },
+      body: { confirm: RESET_CONFIRM_WORD },
     });
     setLoading(false);
     if (res.ok && res.data) {
-      const { participantsDeleted, pendingKept } = res.data.result;
-      toast.show(
-        "success",
-        `Statistiche azzerate: ${participantsDeleted} partecipazioni eliminate` +
-          (pendingKept > 0 ? `, ${pendingKept} premi da ritirare conservati.` : "."),
-      );
+      toast.show("success", `Statistiche azzerate: ${res.data.result.gamesDeleted} partite eliminate.`);
       setOpen(false);
       setWord("");
       router.refresh();
@@ -82,8 +60,8 @@ export function ResetStats({ pendingPrizes }: { pendingPrizes: number }) {
         <TriangleAlert className="size-5" aria-hidden /> Zona pericolosa
       </h2>
       <p className="mt-1 text-[15px] text-ink-soft">
-        Azzera partecipanti, vincitori, premi ed età. Domande e foto dei premi non vengono toccate. L&apos;operazione non può
-        essere annullata.
+        Azzera partite e vincite. Domande, premi, foto e scorte non vengono toccati (le scorte si modificano in Premi e
+        scorte). L&apos;operazione non può essere annullata.
       </p>
       <button
         type="button"
@@ -110,33 +88,8 @@ export function ResetStats({ pendingPrizes }: { pendingPrizes: number }) {
             Azzerare le statistiche?
           </h2>
           <p className="mt-1 text-[15px] text-ink-soft">
-            Ci sono <strong>{pendingPrizes}</strong> {pendingPrizes === 1 ? "premio" : "premi"} ancora da ritirare.
+            Tutte le partite e le statistiche verranno eliminate. Le domande continuano a ruotare senza ripetersi.
           </p>
-
-          <fieldset className="mt-4 space-y-2">
-            <legend className="sr-only">Cosa azzerare</legend>
-            {OPTIONS.map((o) => (
-              <label
-                key={o.value}
-                className={`flex cursor-pointer gap-3 rounded-2xl border-2 p-3 ${
-                  mode === o.value ? "border-brand-red bg-red-50/60" : "border-neutral-200"
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="reset-mode"
-                  value={o.value}
-                  checked={mode === o.value}
-                  onChange={() => setMode(o.value)}
-                  className="mt-1 size-5 accent-[#da291c]"
-                />
-                <span>
-                  <span className="block font-black">{o.title}</span>
-                  <span className="block text-sm text-ink-soft">{o.text}</span>
-                </span>
-              </label>
-            ))}
-          </fieldset>
 
           <label htmlFor="reset-word" className="mt-4 block text-sm font-extrabold">
             Per confermare scrivi <span className="font-mono text-brand-red">{RESET_CONFIRM_WORD}</span>
